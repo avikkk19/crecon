@@ -10,25 +10,29 @@ const Navbar = () => {
   const dropdownRef = useRef(null);
   const mobileMenuRef = useRef(null);
 
-  // Fetch user data from Supabase
+  // Set up auth state listener
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        
-        if (error) {
-          console.error('Error fetching user:', error);
-        } else if (user) {
-          setUser(user);
-        }
-      } catch (error) {
-        console.error('Unexpected error:', error);
-      } finally {
+    // Initial session check
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      setUser(data.session?.user || null);
+      setLoading(false);
+    };
+    
+    checkSession();
+
+    // Set up auth listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user || null);
         setLoading(false);
       }
-    };
+    );
 
-    fetchUserData();
+    // Cleanup
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   // Close dropdown when clicking outside
@@ -60,7 +64,7 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-black shadow-md py-4 px-4 sm:px-6 sticky">
+    <nav className="bg-black shadow-md py-4 px-4 sm:px-6 fixed top-0 left-0 right-0 z-50">
       <div className="mx-auto flex justify-between items-center">
         {/* Logo - Fixed width to prevent shifting */}
         <div className="flex items-center w-1/4">
@@ -78,11 +82,11 @@ const Navbar = () => {
             <a href="/" className="text-gray-400 hover:text-white transition-colors">
               Home
             </a>
-            <a href="/cources" className="text-gray-400 hover:text-white transition-colors">
-            cources
+            <a href="/courses" className="text-gray-400 hover:text-white transition-colors">
+              Courses
             </a>
-            <a href="/pricing" className="text-gray-400 hover:text-white transition-colors">
-              Pricing
+            <a href="/chat" className="text-gray-400 hover:text-white transition-colors">
+              chat
             </a>
             <a href="/contact" className="text-gray-400 hover:text-white transition-colors">
               Contact
@@ -180,11 +184,11 @@ const Navbar = () => {
             <a href="/" className="block px-3 py-2 text-gray-300 hover:text-white">
               Home
             </a>
-            <a href="/features" className="block px-3 py-2 text-gray-300 hover:text-white">
-              Features
+            <a href="/courses" className="block px-3 py-2 text-gray-300 hover:text-white">
+              Courses
             </a>
-            <a href="/pricing" className="block px-3 py-2 text-gray-300 hover:text-white">
-              Pricing
+            <a href="/chat" className="block px-3 py-2 text-gray-300 hover:text-white">
+              chat
             </a>
             <a href="/contact" className="block px-3 py-2 text-gray-300 hover:text-white">
               Contact

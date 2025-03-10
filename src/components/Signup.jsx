@@ -1,20 +1,11 @@
-import React, { useState } from 'react';
-// import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-// const supabaseUrl = import.meta.env.REACT_APP_SUPABASE_URL; 
-// const supabaseKey = import.meta.env.REACT_APP_SUPABASE_ANON_KEY;
-// const supabase = createClient(supabaseUrl, supabaseKey);
-// console.log("URL:", import.meta.env.REACT_APP_SUPABASE_URL)
-// console.log("Key:", import.meta.env.REACT_APP_SUPABASE_ANON_KEY)
-// const supabase = createClient('https://ijshfaiylidljjuvrrbo.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlqc2hmYWl5bGlkbGpqdXZycmJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEzMjIxNDgsImV4cCI6MjA1Njg5ODE0OH0.AiIOVRQeBNuv94vGPQ26FAYUWlyH4BJ6IqbaVmYvIWA')
-import { supabase } from './supabaseClient';
+import React, { useState } from "react";
+import { supabase } from "./supabaseClient";
 
 const SignupForm = () => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -24,8 +15,7 @@ const SignupForm = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    
-    // Validate passwords match
+
     if (password !== confirmPassword) {
       setError("Passwords don't match");
       setLoading(false);
@@ -33,43 +23,100 @@ const SignupForm = () => {
     }
 
     try {
-      // 1. Sign up with Supabase Auth
+      // 1. Sign up the user with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            full_name: name,
-          },
-        },
       });
 
       if (authError) throw authError;
-      
-      // 2. Store additional user data in your users table
-      if (authData?.user) {
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert([
-            { 
-              id: authData.user.id, 
-              name: name,
-              email: email, 
-              created_at: new Date(),
-              // Add any other user fields you need
-            }
-          ]);
+      console.log("Auth signup successful:", authData);
 
-        if (profileError) throw profileError;
+      if (!authData.user) {
+        throw new Error("User signup failed. Please try again.");
       }
 
-      console.log('Signup successful!');
+      const userId = authData.user.id;
+
+      // 2. Check if the user already exists in `users` table
+      const { data: existingUser, error: userCheckError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (userCheckError) {
+        console.error("Error checking user existence:", userCheckError);
+        throw new Error("Error verifying user existence");
+      }
+
+      if (!existingUser) {
+        // 3. Insert user into `users` table only if they don’t exist
+        const userData = {
+          id: userId,
+          name,
+          email,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        console.log("Creating user record:", userData);
+
+        const { error: userError } = await supabase
+          .from("users")
+          .insert([userData]);
+
+        if (userError) {
+          console.error("User creation error:", userError);
+          throw new Error(`User creation failed: ${userError.message}`);
+        }
+      } else {
+        console.log("User already exists, skipping insertion.");
+      }
+
+      // 4. Check if profile exists before inserting
+      const { data: existingProfile, error: profileCheckError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (profileCheckError) {
+        console.error("Error checking profile existence:", profileCheckError);
+        throw new Error("Error verifying profile existence");
+      }
+
+      if (!existingProfile) {
+        // 5. Insert into `profiles` now that user exists
+        const username = `${email.split("@")[0]}_${Math.floor(
+          Math.random() * 1000
+        )}`;
+
+        const profileData = {
+          id: userId,
+          username: username,
+          full_name: name,
+          created_at: new Date().toISOString(),
+        };
+
+        console.log("Creating profile record:", profileData);
+
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .insert([profileData]);
+
+        if (profileError) {
+          console.error("Profile creation error:", profileError);
+          throw new Error(`Profile creation failed: ${profileError.message}`);
+        }
+      } else {
+        console.log("Profile already exists, skipping insertion.");
+      }
+
+      console.log("User and profile created successfully");
       setSuccess(true);
-      
-      // Redirect to verification page or sign-in page
-      // window.location.href = '/verification'; // Uncomment to redirect
     } catch (error) {
-      console.error('Error during signup:', error.message);
+      console.error("Error during signup:", error.message);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -86,12 +133,12 @@ const SignupForm = () => {
       });
 
       if (error) throw error;
-      
+
       // The user will be redirected to the OAuth provider
-      console.log('OAuth signup initiated', data);
+      console.log("OAuth signup initiated", data);
     } catch (error) {
       console.error(`Error signing up with ${provider}:`, error.message);
-      // setError(error.message);
+      setError(error.message);
     }
   };
 
@@ -111,13 +158,16 @@ const SignupForm = () => {
 
         {success && (
           <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
-            Account created successfully! Please signin to redirect.
+            Account created successfully! Please sign in to continue.
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
           <div className="mb-6">
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="name"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Full Name
             </label>
             <input
@@ -126,14 +176,17 @@ const SignupForm = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="narendra modi"
+              placeholder="Your full name"
               required
               disabled={loading || success}
             />
           </div>
 
           <div className="mb-6">
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Email Address
             </label>
             <input
@@ -147,9 +200,12 @@ const SignupForm = () => {
               disabled={loading || success}
             />
           </div>
-          
+
           <div className="mb-6">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Password
             </label>
             <input
@@ -165,7 +221,10 @@ const SignupForm = () => {
           </div>
 
           <div className="mb-6">
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="confirmPassword"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Confirm Password
             </label>
             <input
@@ -179,7 +238,7 @@ const SignupForm = () => {
               disabled={loading || success}
             />
           </div>
-          
+
           <div className="flex items-center mb-6">
             <input
               type="checkbox"
@@ -190,35 +249,52 @@ const SignupForm = () => {
               required
               disabled={loading || success}
             />
-            <label htmlFor="agreeTerms" className="ml-2 block text-sm text-gray-700">
-              I agree to the <a href="#" className="text-blue-600 hover:text-blue-800">Terms of Service</a> and <a href="#" className="text-blue-600 hover:text-blue-800">Privacy Policy</a>
+            <label
+              htmlFor="agreeTerms"
+              className="ml-2 block text-sm text-gray-700"
+            >
+              I agree to the{" "}
+              <a href="#" className="text-blue-600 hover:text-blue-800">
+                Terms of Service
+              </a>{" "}
+              and{" "}
+              <a href="#" className="text-blue-600 hover:text-blue-800">
+                Privacy Policy
+              </a>
             </label>
           </div>
-          
+
           <button
             type="submit"
-            className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${(loading || success) ? 'opacity-70 cursor-not-allowed' : ''}`}
+            className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${
+              loading || success ? "opacity-70 cursor-not-allowed" : ""
+            }`}
             disabled={loading || success}
           >
-            {loading ? 'Creating Account...' : 'Create Account'}
+            {loading ? "Creating Account..." : "Create Account"}
           </button>
         </form>
-        
+
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            Already have an account?{' '}
-            <a href="/signin" className="text-blue-600 hover:text-blue-800 font-medium">
+            Already have an account?{" "}
+            <a
+              href="/signin"
+              className="text-blue-600 hover:text-blue-800 font-medium"
+            >
               Sign in
             </a>
           </p>
         </div>
-        
-        {/* <div className="mt-8 border-t pt-6">
-          <p className="text-center text-xs text-gray-600 mb-4">Or continue with</p>
+
+        <div className="mt-8 border-t pt-6">
+          <p className="text-center text-xs text-gray-600 mb-4">
+            Or continue with
+          </p>
           <div className="flex gap-4">
             <button
               type="button"
-              onClick={() => handleSocialSignup('google')}
+              onClick={() => handleSocialSignup("google")}
               className="flex-1 py-2 px-4 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
               disabled={loading || success}
             >
@@ -226,14 +302,14 @@ const SignupForm = () => {
             </button>
             <button
               type="button"
-              onClick={() => handleSocialSignup('github')}
+              onClick={() => handleSocialSignup("github")}
               className="flex-1 py-2 px-4 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
               disabled={loading || success}
             >
               GitHub
             </button>
           </div>
-        </div> */}
+        </div>
       </div>
     </div>
   );

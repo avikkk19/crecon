@@ -108,7 +108,7 @@ const JoinCoursePage = () => {
               description="Learn full-stack web development from scratch with React, Node.js, and MongoDB."
               level="Intermediate"
               duration="12 weeks"
-              price="$499"
+              price="@4999"
               tag="Bestseller"
             />
           </div>
@@ -119,7 +119,7 @@ const JoinCoursePage = () => {
               description="Master the fundamentals of AI, neural networks, and practical ML model deployment."
               level="Advanced"
               duration="10 weeks"
-              price="$599"
+              price="@5999"
               tag="New"
             />
           </div>
@@ -130,7 +130,7 @@ const JoinCoursePage = () => {
               description="Create stunning interfaces and learn user experience principles for modern applications."
               level="Beginner"
               duration="8 weeks"
-              price="$399"
+              price="@3999"
               tag="Popular"
             />
           </div>
@@ -156,6 +156,7 @@ const JoinCoursePage = () => {
                 <div className="text-gray-400 text-sm">Average Rating</div>
               </div>
             </div>
+                <h1 className=" mt-3.5 justify-center flex font-bold">All fake data btw, example usage</h1>
           </div>
           
           {/* CTA Section */}

@@ -12,7 +12,7 @@ const HeroSection = () => {
         {/* 3D Objects - Hidden on mobile, visible on larger screens */}
         <div className="hidden sm:block absolute left-0 top-1/4 w-1/2 h-full pointer-events-none">
           <div className="absolute left-12 top-0 w-16 sm:w-24 bg-emerald-200 h-16 sm:h-24 rounded-lg opacity-80"></div>
-          <div className="absolute left-0 bottom-12 w-auto sm:w-[40rem] h-16 bg-white sm:h-24 rounded-xl opacity-20"></div>
+          <div className="absolute left-80 bottom-35 w-auto sm:w-[40rem] h-16 bg-white sm:h-2 rounded-xl opacity-20"></div>
           {/* <div className="absolute left-32 sm:left-48 bottom-36 w-36 sm:w-48 h-16 sm:h-24 bg-gray-400 opacity-80"></div> */}
         </div>
 
@@ -36,9 +36,11 @@ const HeroSection = () => {
             *Currently in beta, sign up to get early access.*
           </p>
 
+          <a href="/">
           <button className="bg-white text-black px-6 py-3 rounded-full font-medium hover:bg-pink-500 hover:text-white transition-colors">
             Start your journey
           </button>
+          </a>
         </div>
 
         {/* Company logos - Scrollable on mobile */}
@@ -51,7 +53,7 @@ const HeroSection = () => {
             <img src={microsoft} alt="Microsoft" className="h-6 sm:h-8 flex-shrink-0" />
             <img src={github} alt="GitHub" className="h-6 sm:h-8 flex-shrink-0" />
             <img src={google} alt="Uber" className="h-6 sm:h-8 flex-shrink-0" />
-            <img src={notion} alt="Notion" className="h-6 sm:h-8 flex-shrink-0" />
+            <img src={notion} alt="Notion" className="h-6 sm:h-8 flex-shrink-0 bg-amber-50" />
           </div>
         </div>
       </div>
