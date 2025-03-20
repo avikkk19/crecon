@@ -1,59 +1,62 @@
-import React from 'react';
-import { Route, Routes } from 'react-router-dom';
-import SignupForm from './components/Signup';
-import SignInForm from './components/Signin';
-import HeroSection from './components/HeroSection';
-import Navbar from './components/Navbar';
-import JoinCoursePage from './components/Cources';
-import { AuthProvider } from './components/auth/AuthContext';
-import AuthRoute from './components//auth/AuthRoute';
-import ProtectedRoute from './components/auth/ProtectedRoute';
-import Chat from './components/Chat';
+import React from "react";
+import { Route, Routes } from "react-router-dom";
+import SignupForm from "./components/Signup";
+import SignInForm from "./components/Signin";
+import HeroSection from "./components/HeroSection";
+import Navbar from "./components/Navbar";
+import { AuthProvider } from "./components/auth/AuthContext";
+import AuthRoute from "./components//auth/AuthRoute";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import ModernChatInterface from "./components/Chat";
+import Footer from "./components/Footer";
+import Blog from "./components/Blog";
 
 const App = () => {
   return (
     <AuthProvider>
       <Navbar />
       <Routes>
-        <Route path='/' element={<HeroSection />} />
-        
+        <Route path="/" element={<HeroSection />} />
+
         {/* Auth routes - redirect if already logged in */}
-        <Route 
-          path="/signin" 
+        <Route
+          path="/signin"
           element={
             <AuthRoute>
               <SignInForm />
             </AuthRoute>
-          } 
+          }
         />
-        
-        <Route 
-          path="/signup" 
+
+        <Route
+          path="/signup"
           element={
             <AuthRoute>
               <SignupForm />
             </AuthRoute>
-          } 
+          }
         />
-        
+
         {/* Protected routes - require authentication */}
-        <Route 
-          path="/courses" 
+        <Route
+          path="/chat"
           element={
             <ProtectedRoute>
-              <JoinCoursePage />
+              <ModernChatInterface />
             </ProtectedRoute>
-          } 
+          }
         />
-         <Route 
-          path="/chat" 
+
+        <Route
+          path="/blog"
           element={
             <ProtectedRoute>
-              <Chat />
+              <Blog />
             </ProtectedRoute>
-          } 
+          }
         />
       </Routes>
+      <Footer />
     </AuthProvider>
   );
 };

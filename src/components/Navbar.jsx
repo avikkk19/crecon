@@ -73,7 +73,7 @@ const Navbar = () => {
             alt="Logo" 
             className="h-8 w-auto" 
           />
-          <span className="ml-2 text-xl font-semibold text-gray-300">NnY</span>
+          <span className="ml-2 font-semibold text-gray-300">CollabEdit</span>
         </div>
 
         {/* Navigation Links - Fixed position in center */}
@@ -82,9 +82,9 @@ const Navbar = () => {
             <a href="/" className="text-gray-400 hover:text-white transition-colors">
               Home
             </a>
-            <a href="/courses" className="text-gray-400 hover:text-white transition-colors">
+            {/* <a href="/courses" className="text-gray-400 hover:text-white transition-colors">
               Courses
-            </a>
+            </a> */}
             <a href="/chat" className="text-gray-400 hover:text-white transition-colors">
               chat
             </a>
@@ -148,12 +148,12 @@ const Navbar = () => {
                         {user.user_metadata?.full_name || 'Account Settings'}
                       </p>
                     </div>
-                    <a href="/profile" className="block px-4 py-2 text-sm hover:bg-gray-700">
+                    {/* <a href="/profile" className="block px-4 py-2 text-sm hover:bg-gray-700">
                       Your Profile
                     </a>
                     <a href="/settings" className="block px-4 py-2 text-sm hover:bg-gray-700">
                       Settings
-                    </a>
+                    </a> */}
                     <button 
                       onClick={handleSignOut}
                       className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700"
@@ -168,7 +168,7 @@ const Navbar = () => {
                 <a href="/signin" className="text-gray-300 hover:text-white">
                   Sign in
                 </a>
-                <a href="/signup" className="bg-pink-500 text-white px-4 py-2 rounded-md hover:bg-pink-600">
+                <a href="/signup" className="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-500">
                   Sign up
                 </a>
               </div>
@@ -213,12 +213,12 @@ const Navbar = () => {
                   </div>
                 </div>
                 <div className="mt-3 px-2 space-y-1">
-                  <a href="/profile" className="block px-3 py-2 text-sm text-gray-300 hover:text-white">
+                  {/* <a href="/profile" className="block px-3 py-2 text-sm text-gray-300 hover:text-white">
                     Your Profile
                   </a>
                   <a href="/settings" className="block px-3 py-2 text-sm text-gray-300 hover:text-white">
                     Settings
-                  </a>
+                  </a> */}
                   <button
                     onClick={handleSignOut}
                     className="block w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-gray-700"
