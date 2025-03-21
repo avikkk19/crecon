@@ -11,6 +11,6 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "dist", // Ensure Vercel finds the build output
+    outDir: "./dist", // Ensure Vercel finds the build output
   },
 });
