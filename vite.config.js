@@ -17,3 +17,4 @@ export default defineConfig({
     outDir: 'dist', // Ensure Vercel finds the build output
   },
 })
+// Compare this snippet from src/components/Chat.jsx:
