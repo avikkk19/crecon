@@ -1,6 +1,6 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "./AuthContext.jsx";
 
 // Protects routes that require authentication
 const ProtectedRoute = ({ children }) => {

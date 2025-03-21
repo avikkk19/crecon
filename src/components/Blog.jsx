@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-import { supabase } from "./SupabaseClient";
+import { supabase } from "./SupabaseClient.jsx";
 
 // Maximum file size in bytes (8MB) - same as Chat.jsx
 const MAX_FILE_SIZE = 8 * 1024 * 1024;

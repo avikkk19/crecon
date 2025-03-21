@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 // Replace with your Supabase URL and anon key
-import { supabase } from "./SupabaseClient";
+import { supabase } from "./SupabaseClient.jsx";
 
 // Maximum file size in bytes (8MB)
 const MAX_FILE_SIZE = 8 * 1024 * 1024;

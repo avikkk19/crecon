@@ -1,15 +1,15 @@
 import React from "react";
 import { Route, Routes } from "react-router-dom";
-import SignupForm from "./components/Signup";
-import SignInForm from "./components/Signin";
-import HeroSection from "./components/Herosection";
-import Navbar from "./components/Navbar";
-import { AuthProvider } from "./components/auth/AuthContext";
-import AuthRoute from "./components/auth/AuthRoute";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
-import ModernChatInterface from "./components/Chat";
-import Footer from "./components/Footer";
-import Blog from "./components/Blog";
+import SignupForm from "./components/Signup.jsx";
+import SignInForm from "./components/Signin.jsx";
+import HeroSection from "./components/Herosection.jsx";
+import Navbar from "./components/Navbar.jsx";
+import { AuthProvider } from "./components/auth/AuthContext.jsx";
+import AuthRoute from "./components/auth/AuthRoute.jsx";
+import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
+import ModernChatInterface from "./components/Chat.jsx";
+import Footer from "./components/Footer.jsx";
+import Blog from "./components/Blog.jsx";
 
 const App = () => {
   return (
