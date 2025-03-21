@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { supabase } from "./supabaseClient";
+import { supabase } from "./supabaseclient";
 
 const SignupForm = () => {
   const [name, setName] = useState("");
@@ -22,20 +22,20 @@ const SignupForm = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-  
+
     // Validate inputs
     if (password !== confirmPassword) {
       setError("Passwords don't match");
       setLoading(false);
       return;
     }
-  
+
     if (!isValidEmail(email)) {
       setError("Please enter a valid email address");
       setLoading(false);
       return;
     }
-  
+
     try {
       // 1. Sign up the user with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -44,77 +44,85 @@ const SignupForm = () => {
         options: {
           data: {
             full_name: name,
-            role: role
-          }
-        }
+            role: role,
+          },
+        },
       });
-  
+
       if (authError) {
         console.error("Auth error:", authError);
         throw new Error(authError.message);
       }
-  
+
       console.log("Auth signup successful:", authData);
-  
+
       if (!authData.user) {
         throw new Error("User signup failed. Please try again.");
       }
-  
+
       // Get the user ID
       const userId = authData.user.id;
-      
+
       // Create username from email with random suffix
-      const username = `${email.split("@")[0]}_${Math.floor(Math.random() * 1000)}`;
+      const username = `${email.split("@")[0]}_${Math.floor(
+        Math.random() * 1000
+      )}`;
       const currentTime = new Date().toISOString();
-  
+
       // First, try to insert the user record
-      const { error: userError } = await supabase
-        .from("users")
-        .insert([{
+      const { error: userError } = await supabase.from("users").insert([
+        {
           id: userId,
           name,
           email,
           role,
           created_at: currentTime,
-          updated_at: currentTime
-        }]);
-  
+          updated_at: currentTime,
+        },
+      ]);
+
       if (userError) {
         console.error("Failed to create user record:", userError);
         // Don't throw here, but log for debugging
       } else {
         console.log("User record created successfully");
       }
-  
+
       // Next, try to insert the profile record
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert([{
+      const { error: profileError } = await supabase.from("profiles").insert([
+        {
           id: userId,
           username,
           full_name: name,
-          created_at: currentTime
-        }]);
-  
+          created_at: currentTime,
+        },
+      ]);
+
       if (profileError) {
         console.error("Failed to create profile record:", profileError);
-        
+
         // If we get a unique constraint violation, try with a different username
-        if (profileError.code === '23505') { // Postgres unique violation code
-          const retryUsername = `${email.split("@")[0]}_${Math.floor(Math.random() * 10000)}`;
+        if (profileError.code === "23505") {
+          // Postgres unique violation code
+          const retryUsername = `${email.split("@")[0]}_${Math.floor(
+            Math.random() * 10000
+          )}`;
           console.log("Trying again with a different username:", retryUsername);
-          
-          const { error: retryError } = await supabase
-            .from("profiles")
-            .insert([{
+
+          const { error: retryError } = await supabase.from("profiles").insert([
+            {
               id: userId,
               username: retryUsername,
               full_name: name,
-              created_at: currentTime
-            }]);
-            
+              created_at: currentTime,
+            },
+          ]);
+
           if (retryError) {
-            console.error("Second attempt to create profile failed:", retryError);
+            console.error(
+              "Second attempt to create profile failed:",
+              retryError
+            );
           } else {
             console.log("Profile created successfully on second attempt");
           }
@@ -122,19 +130,20 @@ const SignupForm = () => {
       } else {
         console.log("Profile record created successfully");
       }
-  
+
       // Handle email confirmation case
       if (authData.user && !authData.session) {
         console.log("Email verification required - no session established yet");
         setSuccess(true);
-        setError("Please check your email to verify your account before signing in.");
+        setError(
+          "Please check your email to verify your account before signing in."
+        );
         setLoading(false);
         return;
       }
-  
+
       // If we reached here, consider the signup successful
       setSuccess(true);
-      
     } catch (error) {
       console.error("Error during signup:", error.message);
       setError(error.message);
@@ -236,7 +245,9 @@ const SignupForm = () => {
               required
               disabled={loading || success}
             >
-              <option value="" disabled>Select your role</option>
+              <option value="" disabled>
+                Select your role
+              </option>
               <option value="editor">Editor</option>
               <option value="graphic_designer">Graphic Designer</option>
               <option value="content_creator">Content Creator</option>

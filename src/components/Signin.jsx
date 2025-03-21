@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import "../index.css";
-import { supabase } from "./supabaseClient";
+import { supabase } from "./supabaseclient";
 
 const SignInForm = () => {
   const [email, setEmail] = useState("");

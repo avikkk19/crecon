@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import logo from "/src/assets/logo.png";
-import { supabase } from "./supabaseClient";
+import { supabase } from "./supabaseclient";
 
 const Navbar = () => {
   const [user, setUser] = useState(null);
