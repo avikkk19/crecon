@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { supabase } from "./supabaseclient";
+import { supabase } from "./SupabaseClient.jsx";
 
 const SignupForm = () => {
   const [name, setName] = useState("");
