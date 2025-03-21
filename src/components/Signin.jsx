@@ -1,21 +1,10 @@
-import React, { useState } from 'react';
-import '../index.css';
-
-// import { createClient } from '@supabase/supabase-js';
-
-
-// Initialize Supabase client
-// const supabaseUrl = import.meta.env.REACT_APP_SUPABASE_URL;
-// const supabaseKey = import.meta.env.REACT_APP_SUPABASE_ANON_KEY;
-// const supabase = createClient(supabaseUrl, supabaseKey);
-// console.log("URL:", import.meta.env.REACT_APP_SUPABASE_URL)
-// console.log("Key:", import.meta.env.REACT_APP_SUPABASE_ANON_KEY)
-// const supabase = createClient('https://ijshfaiylidljjuvrrbo.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlqc2hmYWl5bGlkbGpqdXZycmJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEzMjIxNDgsImV4cCI6MjA1Njg5ODE0OH0.AiIOVRQeBNuv94vGPQ26FAYUWlyH4BJ6IqbaVmYvIWA')
-import { supabase } from './supabaseClient';
+import React, { useState } from "react";
+import "../index.css";
+import { supabase } from "./supabaseClient";
 
 const SignInForm = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -34,20 +23,19 @@ const SignInForm = () => {
 
       if (error) throw error;
 
-      console.log('Sign in successful:', data);
-      
+      console.log("Sign in successful:", data);
+
       // If remember me is checked, you can extend session (optional)
       if (rememberMe) {
-        localStorage.setItem('rememberMe', 'true');
+        localStorage.setItem("rememberMe", "true");
       } else {
-        localStorage.removeItem('rememberMe');
+        localStorage.removeItem("rememberMe");
       }
 
       // Redirect or update state upon successful login
-      window.location.href = '/'; // Uncomment to redirect
-      
+      window.location.href = "/"; // Uncomment to redirect
     } catch (error) {
-      console.error('Error signing in:', error.message);
+      console.error("Error signing in:", error.message);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -64,9 +52,9 @@ const SignInForm = () => {
       });
 
       if (error) throw error;
-      
+
       // The user will be redirected to the OAuth provider
-      console.log('OAuth login initiated', data);
+      console.log("OAuth login initiated", data);
     } catch (error) {
       console.error(`Error signing in with ${provider}:`, error.message);
       setError(error.message);
@@ -89,7 +77,10 @@ const SignInForm = () => {
 
         <form onSubmit={handleSubmit}>
           <div className="mb-6">
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Email Address
             </label>
             <input
@@ -103,10 +94,13 @@ const SignInForm = () => {
               disabled={loading}
             />
           </div>
-          
+
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Password
               </label>
               <a href="#" className="text-xs text-blue-600 hover:text-blue-800">
@@ -124,7 +118,7 @@ const SignInForm = () => {
               disabled={loading}
             />
           </div>
-          
+
           <div className="flex items-center mb-6">
             <input
               type="checkbox"
@@ -134,29 +128,37 @@ const SignInForm = () => {
               className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               disabled={loading}
             />
-            <label htmlFor="remember" className="ml-2 block text-sm text-gray-700">
+            <label
+              htmlFor="remember"
+              className="ml-2 block text-sm text-gray-700"
+            >
               Remember me
             </label>
           </div>
-          
+
           <button
             type="submit"
-            className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+            className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${
+              loading ? "opacity-70 cursor-not-allowed" : ""
+            }`}
             disabled={loading}
           >
-            {loading ? 'Signing In...' : 'Sign In'}
+            {loading ? "Signing In..." : "Sign In"}
           </button>
         </form>
-        
+
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            Don't have an account?{' '}
-            <a href="/signup" className="text-blue-600 hover:text-blue-800 font-medium">
+            Don't have an account?{" "}
+            <a
+              href="/signup"
+              className="text-blue-600 hover:text-blue-800 font-medium"
+            >
               Sign up
             </a>
           </p>
         </div>
-        
+
         {/* <div className="mt-8 border-t pt-6">
           <p className="text-center text-xs text-gray-600 mb-4">Or continue with</p>
           <div className="flex gap-4">

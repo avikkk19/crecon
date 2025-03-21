@@ -91,6 +91,9 @@ const Navbar = () => {
             <a href="/contact" className="text-gray-400 hover:text-white transition-colors">
               Contact
             </a>
+            <a href="/blog" className="text-gray-400 hover:text-white transition-colors">
+              blog
+            </a>
           </div>
         </div>
 

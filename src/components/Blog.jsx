@@ -1,11 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// Use the same Supabase config from Chat.jsx
-const supabaseUrl = "https://ijshfaiylidljjuvrrbo.supabase.co";
-const supabaseKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlqc2hmYWl5bGlkbGpqdXZycmJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEzMjIxNDgsImV4cCI6MjA1Njg5ODE0OH0.AiIOVRQeBNuv94vGPQ26FAYUWlyH4BJ6IqbaVmYvIWA";
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase } from "./supabaseClient";
 
 // Maximum file size in bytes (8MB) - same as Chat.jsx
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
@@ -21,6 +17,7 @@ function Blog() {
   const [creating, setCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [uploadError, setUploadError] = useState(null); // Added to track upload errors
   const imageInputRef = useRef(null);
 
   // Blog detail view state
@@ -53,26 +50,8 @@ function Blog() {
   useEffect(() => {
     if (session) {
       fetchBlogs();
-      ensureBucketAccess();
     }
   }, [session]);
-
-  // Create Supabase storage bucket if it doesn't exist - based on Chat.jsx
-  async function ensureBucketAccess() {
-    try {
-      // Just check if we can list files in the bucket, not creating it
-      const { data, error } = await supabase.storage.from(BUCKET_NAME).list();
-
-      if (error) {
-        console.warn("Storage bucket access check failed:", error);
-        // Still continue as the bucket might exist but user can't list files
-      } else {
-        console.log(`Successfully accessed ${BUCKET_NAME} bucket`);
-      }
-    } catch (error) {
-      console.error("Error checking bucket access:", error);
-    }
-  }
 
   // Fetch all blogs
   async function fetchBlogs() {
@@ -117,85 +96,127 @@ function Blog() {
   }
 
   // Upload image to storage - based on Chat.jsx's uploadFile
+  // 1. First, ensure the bucket exists in Supabase dashboard
+  // Navigate to Storage in your Supabase dashboard and check if "blog-images" exists
+  // If not, create it and set appropriate permissions
+
+  // 2. Enhance the uploadImage function with better error logging:
   async function uploadImage(file) {
     if (!file) {
-      console.error("No file provided to uploadImage function");
+      console.error("No file provided for upload");
+      setUploadError("No file was selected for upload");
       return null;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      alert(
-        `File size exceeds the limit of 8MB. Your file is ${(
-          file.size /
-          (1024 * 1024)
-        ).toFixed(2)}MB.`
-      );
-      return null;
-    }
-
-    // Only allow image files
-    if (!file.type.startsWith("image/")) {
-      alert("Only image files are allowed for blog posts");
-      return null;
-    }
+    console.log(
+      "Uploading file:",
+      file.name,
+      "Size:",
+      (file.size / (1024 * 1024)).toFixed(2) + "MB"
+    );
 
     const fileExt = file.name.split(".").pop();
     const fileName = `${Math.random()
       .toString(36)
-      .substring(2, 15)}.${fileExt}`;
-    // Include user_id in the file path to link it to the user
+      .substring(2, 15)}-${Date.now()}.${fileExt}`;
     const filePath = `${session.user.id}/${fileName}`;
 
     setUploading(true);
 
     try {
-      // Upload to blog-images bucket
-      const { error: uploadError } = await supabase.storage
+      console.log(
+        "Attempting upload to bucket:",
+        BUCKET_NAME,
+        "Path:",
+        filePath
+      );
+
+      // Check if bucket exists first
+      // const { data: buckets, error: bucketsError } =
+      //   await supabase.storage.listBuckets();
+
+      // if (bucketsError) {
+      //   console.error("Error checking buckets:", bucketsError);
+      //   setUploadError(`Storage error: ${bucketsError.message}`);
+      //   return null;
+      // }
+
+      // const bucketExists = buckets.some(
+      //   (bucket) => bucket.name === BUCKET_NAME
+      // );
+      // if (!bucketExists) {
+      //   console.error(`Bucket "${BUCKET_NAME}" does not exist!`);
+      //   setUploadError(
+      //     `Storage bucket "${BUCKET_NAME}" does not exist. Please contact the administrator.`
+      //   );
+      //   return null;
+      // }
+
+      // Proceed with upload
+      const { data, error } = await supabase.storage
         .from(BUCKET_NAME)
-        .upload(filePath, file, {
-          metadata: {
-            user_id: session.user.id, // Add user_id as metadata
-          },
-        });
+        .upload(filePath, file, { cacheControl: "3600", upsert: false });
 
-      if (uploadError) throw uploadError;
+      if (error) {
+        console.error("Upload failed:", error.message, error);
+        setUploadError(`Upload failed: ${error.message}`);
+        return null;
+      }
 
-      // Get public URL from blog-images bucket
-      const { data } = supabase.storage
+      console.log("Upload successful:", data);
+
+      // Get public URL
+      const { data: urlData, error: urlError } = supabase.storage
         .from(BUCKET_NAME)
         .getPublicUrl(filePath);
 
-      if (!data) throw new Error("No public URL returned");
-      return data.publicUrl;
-    } catch (error) {
-      console.error("Error uploading image:", error);
-      alert("Error uploading image");
+      if (urlError) {
+        console.error("Error getting public URL:", urlError);
+        setUploadError(
+          `Could not get URL for uploaded file: ${urlError.message}`
+        );
+        return null;
+      }
+
+      const publicUrl = urlData.publicUrl;
+      console.log("Public URL generated:", publicUrl);
+
+      return publicUrl;
+    } catch (err) {
+      console.error("Unexpected error during upload:", err);
+      setUploadError(`Unexpected error: ${err.message}`);
       return null;
     } finally {
       setUploading(false);
     }
   }
 
-  // Handle image selection
+  // Modify handleImageSelect to store the file
   function handleImageSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
 
+    setUploadError(null);
+
     if (file.size > MAX_FILE_SIZE) {
-      alert(
-        `File size exceeds the limit of 8MB. Your file is ${(
-          file.size /
-          (1024 * 1024)
-        ).toFixed(2)}MB.`
-      );
+      const errorMsg = `File size exceeds the limit of 8MB. Your file is ${(
+        file.size /
+        (1024 * 1024)
+      ).toFixed(2)}MB.`;
+      alert(errorMsg);
+      setUploadError(errorMsg);
       return;
     }
 
     // Only allow image files
     if (!file.type.startsWith("image/")) {
+      setUploadError("Only image files are allowed for blog posts");
       alert("Only image files are allowed for blog posts");
       return;
     }
+
+    // Store the file object
+    setSelectedFile(file);
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -208,9 +229,11 @@ function Blog() {
     reader.readAsDataURL(file);
   }
 
-  // Cancel image upload
+  // Clear the file when canceling upload
   function cancelImageUpload() {
     setImagePreview(null);
+    setSelectedFile(null);
+    setUploadError(null);
     if (imageInputRef.current) {
       imageInputRef.current.value = "";
     }
@@ -221,64 +244,67 @@ function Blog() {
     const { name, value } = e.target;
     setNewBlog((prev) => ({ ...prev, [name]: value }));
   }
-
+  const [selectedFile, setSelectedFile] = useState(null);
   // Submit new blog
   async function handleSubmitBlog(e) {
     e.preventDefault();
 
-    if (!newBlog.title.trim() || !newBlog.content.trim()) {
+    if (!newBlog.title || !newBlog.content) {
       alert("Title and content are required");
       return;
     }
 
     setCreating(true);
+    setUploadError(null);
 
     try {
       let imageUrl = null;
 
-      // Upload image if selected
-      if (
-        imagePreview &&
-        imageInputRef.current &&
-        imageInputRef.current.files[0]
-      ) {
-        imageUrl = await uploadImage(imageInputRef.current.files[0]);
+      // Use the stored file instead of checking the input element
+      if (selectedFile) {
+        console.log("Using stored file for upload:", selectedFile.name);
+        imageUrl = await uploadImage(selectedFile);
+
+        if (!imageUrl) {
+          console.error("Image upload failed or was cancelled");
+          // Allow the blog creation to continue without an image
+        } else {
+          console.log("Successfully uploaded image:", imageUrl);
+        }
+      } else {
+        console.log("No image selected for upload");
       }
 
-      // Create blog entry in database
+      console.log("Creating blog entry with image URL:", imageUrl);
+
       const { data, error } = await supabase
         .from("blogs")
         .insert({
-          title: newBlog.title.trim(),
-          summary: newBlog.summary.trim(),
-          content: newBlog.content.trim(),
+          title: newBlog.title,
+          summary: newBlog.summary,
+          content: newBlog.content,
           image_url: imageUrl,
           author_id: session.user.id,
         })
         .select();
 
-      if (error) throw error;
-
-      // Add new blog to state with author profile
-      if (data && data[0]) {
-        // Clear form
-        setNewBlog({
-          title: "",
-          summary: "",
-          content: "",
-        });
-        setImagePreview(null);
-        if (imageInputRef.current) imageInputRef.current.value = "";
-
-        // Refresh blogs
-        fetchBlogs();
-
-        // Close form
-        setCreating(false);
+      if (error) {
+        throw error;
       }
+      console.log("Blog created successfully:", data);
+
+      // Update UI and reset form
+      setBlogs([...blogs, ...data]);
+      setNewBlog({ title: "", summary: "", content: "" });
+      setImagePreview(null);
+      if (imageInputRef.current) {
+        imageInputRef.current.value = "";
+      }
+      setCreating(false);
+      setSelectedFile(null);
     } catch (error) {
       console.error("Error creating blog:", error);
-      alert("Error creating blog post");
+      setUploadError(`Error creating blog: ${error.message}`);
     } finally {
       setCreating(false);
     }
@@ -286,19 +312,25 @@ function Blog() {
 
   // Navigate to Chat with author and prepare blog for attachment
   function startChatWithAuthor(blog, authorId) {
-    // Store blog data in sessionStorage to be picked up by the Chat component
-    const blogData = {
-      id: blog.id,
-      title: blog.title,
-      authorId: authorId,
-      previewText: blog.summary || blog.content.substring(0, 100) + "...",
-      type: "blog",
+    if (!blog || !authorId) {
+      console.error("Missing blog or author data for chat");
+      return;
+    }
+
+    console.log("Starting chat with author:", authorId, "about blog:", blog.id);
+
+    // Store author data in sessionStorage to be picked up by the Chat component
+    const authorData = {
+      id: authorId,
+      username: profiles[authorId]?.username || "Anonymous",
+      avatar_url: profiles[authorId]?.avatar_url || null,
     };
 
-    sessionStorage.setItem("pendingAttachment", JSON.stringify(blogData));
+    sessionStorage.setItem("selectedUser", JSON.stringify(authorData));
+    console.log("Set selectedUser in sessionStorage:", authorData);
 
-    // Navigate to chat with this user
-    window.location.href = `/chat?user=${authorId}`;
+    // Navigate to chat page
+    window.location.href = "/chat";
   }
 
   // Open blog detail view
@@ -426,6 +458,28 @@ function Blog() {
             <h2 className="text-xl font-bold text-white mb-4">
               Create New Blog Post
             </h2>
+
+            {/* Show upload error if any */}
+            {uploadError && (
+              <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-300">
+                <p className="flex items-center">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 mr-2"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {uploadError}
+                </p>
+              </div>
+            )}
+
             <form onSubmit={handleSubmitBlog}>
               <div className="mb-4">
                 <label className="block text-gray-300 mb-2">Title</label>
@@ -546,6 +600,7 @@ function Blog() {
                     setCreating(false);
                     setNewBlog({ title: "", summary: "", content: "" });
                     setImagePreview(null);
+                    setUploadError(null);
                     if (imageInputRef.current) imageInputRef.current.value = "";
                   }}
                   className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
@@ -604,6 +659,12 @@ function Blog() {
                   src={selectedBlog.image_url}
                   alt={selectedBlog.title}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    console.error("Image failed to load:", e.target.src);
+                    e.target.src =
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23333'/%3E%3Cpath d='M30 40 L50 65 L70 40' stroke='%23666' stroke-width='4' fill='none'/%3E%3Ccircle cx='50' cy='30' r='10' fill='%23666'/%3E%3C/svg%3E";
+                    e.target.alt = "Image failed to load";
+                  }}
                 />
               </div>
             )}
@@ -623,6 +684,14 @@ function Blog() {
                           src={profiles[selectedBlog.author_id].avatar_url}
                           alt={profiles[selectedBlog.author_id].username}
                           className="w-10 h-10 rounded-full object-cover"
+                          onError={(e) => {
+                            e.target.src =
+                              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23805AD5'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='white' font-size='20' font-family='Arial'%3E" +
+                              (profiles[selectedBlog.author_id].username || "A")
+                                .charAt(0)
+                                .toUpperCase() +
+                              "%3C/text%3E%3C/svg%3E";
+                          }}
                         />
                       ) : (
                         (profiles[selectedBlog.author_id].username || "A")
@@ -642,92 +711,90 @@ function Blog() {
                     </div>
                   </div>
                 </div>
-
-                <button
-                  onClick={() =>
-                    startChatWithAuthor(selectedBlog, selectedBlog.author_id)
-                  }
-                  className="ml-auto bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4 mr-2"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+                {/* Only show chat button if not the current user */}
+                {selectedBlog.author_id !== session.user.id && (
+                  <button
+                    onClick={() =>
+                      startChatWithAuthor(selectedBlog, selectedBlog.author_id)
+                    }
+                    className="ml-auto bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    />
-                  </svg>
-                  Chat with Author
-                </button>
-              </div>
-
-              {/* Summary if available */}
-              {selectedBlog.summary && (
-                <div className="text-lg text-gray-300 mb-6 italic border-l-4 border-gray-600 pl-4">
-                  {selectedBlog.summary}
-                </div>
-              )}
-
-              {/* Blog content - render with simple formatting */}
-              <div className="prose prose-invert max-w-none">
-                {selectedBlog.content.split("\n").map((paragraph, index) =>
-                  paragraph ? (
-                    <p key={index} className="mb-4">
-                      {paragraph}
-                    </p>
-                  ) : (
-                    <br key={index} />
-                  )
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 mr-2"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                      />
+                    </svg>
+                    Chat with Author
+                  </button>
                 )}
+              </div>
+              {/* Content */}
+              <div className="prose prose-invert max-w-none">
+                {/* If there's a summary, display it in italic first */}
+                {selectedBlog.summary && (
+                  <p className="text-gray-400 italic text-lg mb-6">
+                    {selectedBlog.summary}
+                  </p>
+                )}
+
+                {/* Main content with line breaks preserved */}
+                <div className="whitespace-pre-line">
+                  {selectedBlog.content}
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Blog posts grid */}
-        {!creating &&
-          !selectedBlog &&
-          (blogs.length === 0 ? (
-            <div className="text-center py-10 text-gray-500">
-              No blog posts yet. Be the first to create one!
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {blogs.map((blog) => {
-                const author = profiles[blog.author_id] || {
-                  username: "Anonymous",
-                };
-                return (
+        {/* Blog grid (only show when not in detail view and not creating) */}
+        {!selectedBlog && !creating && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {blogs.length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <p className="text-gray-400 mb-4">No blog posts yet</p>
+                <button
+                  onClick={() => setCreating(true)}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg"
+                >
+                  Create the first post
+                </button>
+              </div>
+            ) : (
+              blogs.map((blog) => (
+                <div
+                  key={blog.id}
+                  className="bg-gray-800 rounded-lg overflow-hidden shadow-lg border border-gray-700 flex flex-col hover:border-purple-500 transition-colors duration-200"
+                >
+                  {/* Blog card image */}
                   <div
-                    key={blog.id}
-                    className="bg-gray-800 rounded-lg shadow-lg overflow-hidden border border-gray-700 flex flex-col"
+                    className="h-48 overflow-hidden relative cursor-pointer"
+                    onClick={() => openBlogDetail(blog)}
                   >
-                    {/* Blog image - now properly sized and displayed */}
                     {blog.image_url ? (
-                      <div
-                        className="h-48 w-full overflow-hidden cursor-pointer"
-                        onClick={() => openBlogDetail(blog)}
-                      >
-                        <img
-                          src={blog.image_url}
-                          alt={blog.title}
-                          className="w-full h-full object-cover hover:opacity-90 transition-opacity duration-300"
-                        />
-                      </div>
+                      <img
+                        src={blog.image_url}
+                        alt={blog.title}
+                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                        onError={(e) => {
+                          e.target.src =
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23333'/%3E%3Cpath d='M30 40 L50 65 L70 40' stroke='%23666' stroke-width='4' fill='none'/%3E%3Ccircle cx='50' cy='30' r='10' fill='%23666'/%3E%3C/svg%3E";
+                          e.target.alt = "Image failed to load";
+                        }}
+                      />
                     ) : (
-                      <div
-                        className="h-48 bg-gray-700 flex items-center justify-center cursor-pointer"
-                        onClick={() => openBlogDetail(blog)}
-                      >
+                      <div className="w-full h-full bg-gray-700 flex items-center justify-center">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
-                          className="h-16 w-16 text-gray-600"
+                          className="h-12 w-12 text-gray-500"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -735,60 +802,73 @@ function Blog() {
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeWidth={1}
+                            strokeWidth={2}
                             d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                           />
                         </svg>
                       </div>
                     )}
+                  </div>
 
-                    {/* Blog content */}
-                    <div
-                      className="p-4 flex-1 flex flex-col cursor-pointer"
+                  {/* Card content */}
+                  <div className="p-5 flex-1 flex flex-col">
+                    <h3
+                      className="text-xl font-bold text-white mb-2 cursor-pointer hover:text-purple-400"
                       onClick={() => openBlogDetail(blog)}
                     >
-                      <h2 className="text-xl font-bold text-white mb-2 line-clamp-2">
-                        {blog.title}
-                      </h2>
+                      {blog.title}
+                    </h3>
 
-                      {blog.summary && (
-                        <p className="text-gray-400 mb-4 line-clamp-2">
-                          {blog.summary}
-                        </p>
-                      )}
+                    {/* Summary or truncated content */}
+                    <p
+                      className="text-gray-400 mb-4 line-clamp-3 flex-1 cursor-pointer"
+                      onClick={() => openBlogDetail(blog)}
+                    >
+                      {blog.summary || blog.content.substring(0, 120) + "..."}
+                    </p>
 
-                      <div className="flex items-center mt-auto pt-4 border-t border-gray-700">
-                        <div className="flex items-center">
+                    {/* Author and date info */}
+                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-700">
+                      <div className="flex items-center">
+                        {profiles[blog.author_id] && (
                           <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white mr-2">
-                            {author.avatar_url ? (
+                            {profiles[blog.author_id].avatar_url ? (
                               <img
-                                src={author.avatar_url}
-                                alt={author.username}
+                                src={profiles[blog.author_id].avatar_url}
+                                alt={profiles[blog.author_id].username}
                                 className="w-8 h-8 rounded-full object-cover"
+                                onError={(e) => {
+                                  e.target.src =
+                                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23805AD5'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='white' font-size='20' font-family='Arial'%3E" +
+                                    (profiles[blog.author_id].username || "A")
+                                      .charAt(0)
+                                      .toUpperCase() +
+                                    "%3C/text%3E%3C/svg%3E";
+                                }}
                               />
                             ) : (
-                              (author.username || "A").charAt(0).toUpperCase()
+                              (profiles[blog.author_id].username || "A")
+                                .charAt(0)
+                                .toUpperCase()
                             )}
                           </div>
-                          <span className="text-sm text-gray-400">
-                            {author.username || author.full_name || "Anonymous"}
-                          </span>
-                        </div>
-
-                        <span className="text-xs text-gray-500 ml-auto">
-                          {formatDate(blog.created_at)}
+                        )}
+                        <span className="text-gray-400 text-sm">
+                          {profiles[blog.author_id]?.username ||
+                            profiles[blog.author_id]?.full_name ||
+                            "Anonymous"}
                         </span>
                       </div>
+                      <span className="text-gray-500 text-sm">
+                        {formatDate(blog.created_at)}
+                      </span>
                     </div>
 
                     {/* Action buttons */}
-                    <div className="bg-gray-700 p-3 flex justify-between items-center">
+                    <div className="flex mt-3 space-x-2">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startChatWithAuthor(blog, blog.author_id);
-                        }}
-                        className="text-purple-400 hover:text-purple-300 flex items-center text-sm"
+                        onClick={() => openBlogDetail(blog)}
+                        className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-1 px-3 rounded-lg text-sm flex items-center justify-center"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -801,45 +881,50 @@ function Blog() {
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                           />
-                        </svg>
-                        Chat
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openBlogDetail(blog);
-                        }}
-                        className="text-gray-300 hover:text-white flex items-center text-sm"
-                      >
-                        Read Post
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4 ml-1"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M14 5l7 7m0 0l-7 7m7-7H3"
+                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                           />
                         </svg>
+                        Read
                       </button>
+
+                      {/* Only show chat button if not the current user */}
+                      {blog.author_id !== session.user.id && (
+                        <button
+                          onClick={() =>
+                            startChatWithAuthor(blog, blog.author_id)
+                          }
+                          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-1 px-3 rounded-lg text-sm flex items-center justify-center"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4 mr-1"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                            />
+                          </svg>
+                          Chat
+                        </button>
+                      )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ))}
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

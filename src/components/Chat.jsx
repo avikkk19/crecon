@@ -1,15 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { createClient } from "@supabase/supabase-js";
 
 // Replace with your Supabase URL and anon key
-const supabaseUrl = "https://ijshfaiylidljjuvrrbo.supabase.co";
-const supabaseKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlqc2hmYWl5bGlkbGpqdXZycmJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEzMjIxNDgsImV4cCI6MjA1Njg5ODE0OH0.AiIOVRQeBNuv94vGPQ26FAYUWlyH4BJ6IqbaVmYvIWA";
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase } from "./SupabaseClient";
 
 // Maximum file size in bytes (8MB)
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
-
 // Bucket name constant
 const BUCKET_NAME = "chat-media";
 
@@ -22,6 +17,7 @@ function Chat() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
+  const [searchTerm, setSearchTerm] = useState(""); // Add search term state
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -45,8 +41,6 @@ function Chat() {
   useEffect(() => {
     if (session) {
       fetchProfiles();
-      // Create storage bucket when user is authenticated
-      createBucketIfNotExists();
     }
   }, [session]);
 
@@ -154,44 +148,6 @@ function Chat() {
     }
   }
 
-  // Create Supabase storage bucket if it doesn't exist - FIXED VERSION
-  async function createBucketIfNotExists() {
-    try {
-      // First, try to list buckets to check if ours exists
-      const { data: buckets, error: listError } = await supabase.storage.listBuckets();
-      
-      if (listError) {
-        console.error("Error listing buckets:", listError);
-        return; // Exit early but don't break the app
-      }
-      
-      // Check if our bucket exists in the list
-      const bucketExists = buckets.some(bucket => bucket.name === BUCKET_NAME);
-      
-      if (!bucketExists) {
-        // Bucket doesn't exist, try to create it
-        const { error: createError } = await supabase.storage.createBucket(
-          BUCKET_NAME,
-          {
-            public: true,
-            fileSizeLimit: MAX_FILE_SIZE,
-          }
-        );
-
-        if (createError) {
-          console.error("Error creating bucket:", createError);
-        } else {
-          console.log(`Storage bucket ${BUCKET_NAME} created successfully`);
-        }
-      } else {
-        console.log(`Storage bucket ${BUCKET_NAME} already exists`);
-      }
-    } catch (error) {
-      console.error("Error in bucket management:", error);
-      // Continue with the application even if bucket creation fails
-    }
-  }
-
   // Scroll to bottom of messages
   function scrollToBottom() {
     setTimeout(() => {
@@ -235,14 +191,14 @@ function Chat() {
             user_id: session.user.id, // Add user_id as metadata
           },
         });
-        
+
       if (uploadError) throw uploadError;
 
       // Get public URL from chat-media bucket
       const { data } = supabase.storage
         .from(BUCKET_NAME)
         .getPublicUrl(filePath);
-        
+
       if (!data) throw new Error("No public URL returned");
       return data.publicUrl;
     } catch (error) {
@@ -394,16 +350,22 @@ function Chat() {
       let messageContent = newMessage.trim();
 
       // Handle file upload if there's a preview
-      if (filePreview && fileInputRef.current && fileInputRef.current.files[0]) {
+      if (
+        filePreview &&
+        fileInputRef.current &&
+        fileInputRef.current.files[0]
+      ) {
         const file = fileInputRef.current.files[0];
         attachmentUrl = await uploadFile(file);
-        
+
         // If upload failed and no text message, don't proceed
         if (!attachmentUrl && !messageContent) return;
 
         // If we have an attachment, embed it in the message content
         if (attachmentUrl) {
-          messageContent = `${messageContent || ""} [ATTACHMENT]${attachmentUrl}`;
+          messageContent = `${
+            messageContent || ""
+          } [ATTACHMENT]${attachmentUrl}`;
         }
       }
 
@@ -445,7 +407,10 @@ function Chat() {
       // Parse the returned message to extract attachment
       if (data && data[0]) {
         const returnedMsg = { ...data[0] };
-        if (returnedMsg.content && returnedMsg.content.includes("[ATTACHMENT]")) {
+        if (
+          returnedMsg.content &&
+          returnedMsg.content.includes("[ATTACHMENT]")
+        ) {
           const parts = returnedMsg.content.split("[ATTACHMENT]");
           returnedMsg.content = parts[0].trim();
           returnedMsg.attachment_url = parts[1].trim();
@@ -487,6 +452,119 @@ function Chat() {
     } catch (error) {
       console.error("Login error:", error);
       alert("Error logging in");
+    }
+  }
+
+  // Load selected user from session storage on mount
+  useEffect(() => {
+    const storedUser = sessionStorage.getItem("selectedUser");
+    if (storedUser) {
+      setSelectedUser(JSON.parse(storedUser));
+      sessionStorage.removeItem("selectedUser");
+    }
+  }, []);
+
+  async function uploadImage(file) {
+    if (!file) {
+      console.error("No file provided");
+      return null;
+    }
+
+    console.log("Uploading file:", file.name);
+
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${Math.random()
+      .toString(36)
+      .substring(2, 15)}-${Date.now()}.${fileExt}`;
+    const filePath = `${session.user.id}/${fileName}`; // 👈 Matches Supabase policy
+
+    setUploading(true);
+
+    try {
+      console.log("File path:", filePath);
+
+      const { data, error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(filePath, file, { cacheControl: "3600", upsert: false });
+
+      if (error) {
+        console.error("Upload failed:", error);
+        return null;
+      }
+
+      console.log("Upload successful:", data);
+
+      const { data: urlData, error: urlError } = supabase.storage
+        .from(BUCKET_NAME)
+        .getPublicUrl(filePath);
+
+      if (urlError) {
+        console.error("Error getting public URL:", urlError);
+        return null;
+      }
+
+      console.log("Public URL:", urlData);
+
+      return urlData.publicUrl;
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleSubmitBlog(e) {
+    e.preventDefault();
+
+    if (!newBlog.title || !newBlog.content) {
+      alert("Title and content are required");
+      return;
+    }
+
+    setCreating(true);
+
+    try {
+      let imageUrl = null;
+
+      if (imageInputRef.current && imageInputRef.current.files[0]) {
+        const file = imageInputRef.current.files[0];
+        imageUrl = await uploadImage(file);
+
+        if (!imageUrl) {
+          throw new Error("Image upload failed");
+        }
+      }
+
+      console.log("Creating blog entry with image URL:", imageUrl);
+
+      const { data, error } = await supabase
+        .from("blogs")
+        .insert({
+          title: newBlog.title,
+          summary: newBlog.summary,
+          content: newBlog.content,
+          image_url: imageUrl,
+          author_id: session.user.id,
+        })
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      console.log("Blog created successfully:", data);
+      setBlogs([...blogs, ...data]);
+      setNewBlog({ title: "", summary: "", content: "" });
+      setImagePreview(null);
+      if (imageInputRef.current) {
+        imageInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error("Error creating blog:", error);
+      alert("Error creating blog");
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -533,6 +611,16 @@ function Chat() {
           </div>
         </div>
 
+        <div className="p-4">
+          <input
+            type="text"
+            placeholder="Search users..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full rounded-lg border border-gray-700 bg-gray-700 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500 text-white"
+          />
+        </div>
+
         <div>
           {profiles.length === 0 ? (
             <div className="p-4 text-gray-500">
@@ -540,39 +628,47 @@ function Chat() {
               table.
             </div>
           ) : (
-            profiles.map((profile) => (
-              <div
-                key={profile.id}
-                className={`p-4 cursor-pointer hover:bg-gray-700 flex items-center ${
-                  selectedUser?.id === profile.id ? "bg-gray-700" : ""
-                }`}
-                onClick={() => setSelectedUser(profile)}
-              >
-                <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white mr-3">
-                  {profile.avatar_url ? (
-                    <img
-                      src={profile.avatar_url}
-                      alt={profile.username}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                  ) : (
-                    (profile.username || profile.full_name || "User")
-                      .charAt(0)
-                      .toUpperCase()
-                  )}
-                </div>
-                <div>
-                  <div className="font-medium text-white">
-                    {profile.username || profile.full_name || "Anonymous User"}
+            profiles
+              .filter((profile) =>
+                profile.username
+                  ?.toLowerCase()
+                  .includes(searchTerm.toLowerCase())
+              )
+              .map((profile) => (
+                <div
+                  key={profile.id}
+                  className={`p-4 cursor-pointer hover:bg-gray-700 flex items-center ${
+                    selectedUser?.id === profile.id ? "bg-gray-700" : ""
+                  }`}
+                  onClick={() => setSelectedUser(profile)}
+                >
+                  <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white mr-3">
+                    {profile.avatar_url ? (
+                      <img
+                        src={profile.avatar_url}
+                        alt={profile.username}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      (profile.username || profile.full_name || "User")
+                        .charAt(0)
+                        .toUpperCase()
+                    )}
                   </div>
-                  {profile.username && profile.full_name && (
-                    <div className="text-sm text-gray-400">
-                      {profile.full_name}
+                  <div>
+                    <div className="font-medium text-white">
+                      {profile.username ||
+                        profile.full_name ||
+                        "Anonymous User"}
                     </div>
-                  )}
+                    {profile.username && profile.full_name && (
+                      <div className="text-sm text-gray-400">
+                        {profile.full_name}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
+              ))
           )}
         </div>
       </div>
@@ -716,7 +812,9 @@ function Chat() {
                 />
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                  onClick={() =>
+                    fileInputRef.current && fileInputRef.current.click()
+                  }
                   disabled={uploading}
                   className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 border-t border-b border-gray-700"
                 >

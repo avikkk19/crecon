@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 const HeroSection = () => {
   return (
@@ -21,17 +22,21 @@ const HeroSection = () => {
               <span className="underline"> management</span> and{" "}
               <span className="underline">metrics</span>
               <br />
-              to look for other opportunity finders
+              to look for other opportunities.
             </p>
           </div>
 
           <div className="flex gap-4 justify-center mt-10">
-            <button className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-              Start your journey
-            </button>
-            <button className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium border border-gray-700 transition-colors">
-              View docs
-            </button>
+            <Link to="/signup">
+              <button className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                Start your journey by signing up
+              </button>
+            </Link>
+            <Link to="/signin">
+              <button className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium border border-gray-700 transition-colors">
+                SIgnin
+              </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -41,85 +46,94 @@ const HeroSection = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <h2 className="text-5xl font-bold mb-4">
-              Tools for the full development workflow
+             Website that your searching ffor
             </h2>
-            <p className="text-xl">
-              All features are tightly integrated with Tracing.
-            </p>
+            <h1 className="text-xl">
+              All features are tightly integrated.
+            </h1>
             <button className="mt-6 bg-transparent hover:bg-gray-800 text-white px-6 py-2 rounded-lg font-medium border border-gray-700 transition-colors inline-flex items-center">
-              Explore docs <span className="ml-2">→</span>
+              {/* Explore docs <span className="ml-2">→</span> */}
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Tool Card 1 */}
-            <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
+            <div className="bg-gray-900 rounded-lg p-5 border border-gray-800">
               <div className="flex items-center mb-4">
-                <span className="text-2xl mr-2">🔧</span>
-                <h3 className="text-xl font-bold">Prompt Management</h3>
+                <span className="text-2xl mr-2">📂</span>
+                <h3 className="text-xl font-bold">
+                  Transparent and Customizable
+                </h3>
               </div>
-              <p className="text-gray-300">
-                Version and deploy prompts collaboratively and retrieve them
-                with low latency.
-              </p>
+              <h1 className="text-gray-300 ">
+                <p className="font-bold">Transparent and Customizable</p>
+                Our app is open source, allowing you to inspect, modify, and
+                enhance the code to fit your specific needs.
+              </h1>
             </div>
 
             {/* Tool Card 2 */}
             <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
               <div className="flex items-center mb-4">
                 <span className="text-2xl mr-2">👍</span>
-                <h3 className="text-xl font-bold">Evaluation</h3>
+                <h3 className="text-xl font-bold">Real-Time Chat:</h3>
               </div>
-              <p className="text-gray-300">
-                Collect user feedback, annotate results, and run evaluation
-                functions.
-              </p>
+              <h1 className="text-gray-300">
+                <p className="font-bold">Instant Communication</p>
+                Enjoy seamless real-time messaging with friends, family, or
+                colleagues, ensuring you stay connected at all times.
+              </h1>
             </div>
 
             {/* Tool Card 3 */}
             <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
               <div className="flex items-center mb-4">
                 <span className="text-2xl mr-2">📊</span>
-                <h3 className="text-xl font-bold">Metrics</h3>
+                <h3 className="text-xl font-bold">Secure and Private</h3>
               </div>
-              <p className="text-gray-300">
-                Track cost, latency, and quality metrics across your
-                applications.
-              </p>
+              <h1 className="text-gray-300">
+                <p className="font-bold">Your Data, Your Control</p>
+                We prioritize your privacy with robust security measures,
+                ensuring your conversations and data remain safe and private.
+              </h1>
             </div>
 
             {/* Tool Card 4 */}
             <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
               <div className="flex items-center mb-4">
                 <span className="text-2xl mr-2">🧪</span>
-                <h3 className="text-xl font-bold">Playground</h3>
+                <h3 className="text-xl font-bold">User-Friendly Interface</h3>
               </div>
-              <p className="text-gray-300">
-                Test different prompts and models right in the UI.
-              </p>
+              <h1 className="text-gray-300">
+                <p className="font-bold">Easy to Use</p>
+                Our intuitive design ensures a smooth user experience, making it
+                easy for anyone to navigate and use the app.
+              </h1>
             </div>
 
             {/* Tool Card 5 */}
             <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
               <div className="flex items-center mb-4">
                 <span className="text-2xl mr-2">🔍</span>
-                <h3 className="text-xl font-bold">Tracing</h3>
+                <h3 className="text-xl font-bold">Feature-Rich</h3>
               </div>
-              <p className="text-gray-300">
+              <h1 className="text-gray-300">
+                <p className="font-bold">Your Data, Your Control</p>
                 Detailed production traces to debug applications faster.
-              </p>
+              </h1>
             </div>
 
             {/* Tool Card 6 */}
             <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
               <div className="flex items-center mb-4">
                 <span className="text-2xl mr-2">💾</span>
-                <h3 className="text-xl font-bold">Datasets</h3>
+                <h3 className="text-xl font-bold">Community Support</h3>
               </div>
-              <p className="text-gray-300">
-                Derive datasets from production data to fine-tune models for
-                your application.
-              </p>
+              <h1 className="text-gray-300">
+                <p className="font-bold">Packed with Features</p>
+                From file sharing to group chats, our app offers a wide range of
+                features to enhance your communication experience.
+              </h1>
             </div>
           </div>
         </div>
@@ -130,11 +144,11 @@ const HeroSection = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-12">
             <h2 className="text-5xl font-bold mb-4">Proudly Open Source</h2>
-            <p className="text-xl mb-6">
+            <h1 className="text-xl mb-6">
               Committed to open source.
               <br />
-              You can also run it locally or self-hosted.
-            </p>
+              Trusted by few used my none
+            </h1>
 
             <a
               href="https://github.com/avikkk19/notyetnamed"
@@ -163,9 +177,9 @@ const HeroSection = () => {
               <div className="flex items-start border-b border-gray-800 pb-4">
                 <div className="flex-grow">
                   <div className="flex items-center">
-                    <span className="text-sm font-medium">New Prompt View</span>
+                    <span className="text-sm font-medium">Added blogs</span>
                     <span className="text-xs text-gray-400 ml-2">
-                      by Maxime
+                    by appalrvu
                     </span>
                   </div>
                 </div>
@@ -175,9 +189,9 @@ const HeroSection = () => {
               <div className="flex items-start border-b border-gray-800 pb-4">
                 <div className="flex-grow">
                   <div className="flex items-center">
-                    <span className="text-sm font-medium">New Trace View</span>
+                    <span className="text-sm font-medium">integrated chats</span>
                     <span className="text-xs text-gray-400 ml-2">
-                      by Maxime
+                      by ballaldevah
                     </span>
                   </div>
                 </div>
@@ -188,10 +202,10 @@ const HeroSection = () => {
                 <div className="flex-grow">
                   <div className="flex items-center">
                     <span className="text-sm font-medium">
-                      OpenAI Response API support
+                      Debugged errors
                     </span>
                     <span className="text-xs text-gray-400 ml-2">
-                      by Hasibix
+                      by kondaReddy
                     </span>
                   </div>
                 </div>
@@ -200,7 +214,7 @@ const HeroSection = () => {
 
               <div className="text-center mt-4">
                 <a
-                  href="/changelog"
+                  href="/"
                   className="text-sm text-gray-400 hover:text-white"
                 >
                   Read the full changelog →

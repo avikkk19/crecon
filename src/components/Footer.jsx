@@ -58,7 +58,7 @@ const Footer = () => {
           </div>
           
           <div className="mt-12 pt-8 border-t border-gray-800 text-sm">
-            <p>© 2022-2025 Langfuse GmbH / Fastic Technologies Inc.</p>
+            <p>© 2022-2025 avinash, viggu Inc.</p>
           </div>
         </div>
       </footer>
