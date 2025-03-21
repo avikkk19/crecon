@@ -2,7 +2,7 @@ import React from "react";
 import { Route, Routes } from "react-router-dom";
 import SignupForm from "./components/Signup.jsx";
 import SignInForm from "./components/Signin.jsx";
-import HeroSection from "./components/Herosection.jsx";
+import HeroSection from "./components/HeroSection.jsx";
 import Navbar from "./components/Navbar.jsx";
 import { AuthProvider } from "./components/auth/AuthContext.jsx";
 import AuthRoute from "./components/auth/AuthRoute.jsx";
