@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../../components/SupabaseClient';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { supabase } from "../supabaseClient";
 
 const AuthContext = createContext();
 
@@ -16,10 +16,12 @@ export function AuthProvider({ children }) {
     const initializeAuth = async () => {
       try {
         // Check if there's an active session
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         setUser(session?.user || null);
       } catch (error) {
-        console.error('Error checking auth session:', error);
+        console.error("Error checking auth session:", error);
       } finally {
         setLoading(false);
       }
@@ -28,11 +30,11 @@ export function AuthProvider({ children }) {
     initializeAuth();
 
     // Subscribe to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user || null);
-      }
-    );
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user || null);
+    });
 
     return () => {
       subscription?.unsubscribe();
@@ -44,7 +46,7 @@ export function AuthProvider({ children }) {
       email,
       password,
     });
-    
+
     if (error) throw error;
     return data;
   };
@@ -57,7 +59,7 @@ export function AuthProvider({ children }) {
         data: userData,
       },
     });
-    
+
     if (error) throw error;
     return data;
   };
@@ -73,7 +75,7 @@ export function AuthProvider({ children }) {
     login,
     signup,
     logout,
-    loading
+    loading,
   };
 
   return (
