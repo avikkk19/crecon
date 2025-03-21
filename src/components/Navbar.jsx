@@ -84,26 +84,24 @@ const Navbar = () => {
             >
               Home
             </a>
-            {/* <a href="/courses" className="text-gray-400 hover:text-white transition-colors">
-              Courses
-            </a> */}
+           
             <a
               href="/chat"
               className="text-gray-400 hover:text-white transition-colors"
             >
-              chat
+              Chat
             </a>
-            <a
-              href="/contact"
+            {/* <a
+              href="/blog"
               className="text-gray-400 hover:text-white transition-colors"
             >
-              Contact
-            </a>
+            blog
+            </a> */}
             <a
               href="/blog"
               className="text-gray-400 hover:text-white transition-colors"
             >
-              blog
+              Blog
             </a>
           </div>
         </div>
