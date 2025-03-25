@@ -1,0 +1,33 @@
+collabedit/
+├── dist
+├── .gitignore
+├── .env
+├── components.json
+├── eslint.config.js
+├── index.html
+├── jsconfig.json
+├── package.json
+├── README.md
+├── tailwind.config.js
+├── vite.config.js
+├── src/
+│   ├── App.jsx
+│   ├── index.css
+│   ├── main.jsx
+│   ├── assets/
+│   │   └── logo.png
+│   ├── components/
+│   │   ├── Blog.jsx
+│   │   ├── Chat.jsx
+│   │   ├── Footer.jsx
+│   │   ├── HeroSection.jsx
+│   │   ├── Navbar.jsx
+│   │   ├── Signin.jsx
+│   │   ├── Signup.jsx
+│   │   ├── SupabaseClient.jsx
+│   │   ├── UserManagement.jsx
+│   │   └── auth/
+│   │       ├── AuthContext.jsx
+│   │       ├── AuthRoute.jsx
+│   │       └── ProtectedRoute.jsx
+└──
