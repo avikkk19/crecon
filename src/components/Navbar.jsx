@@ -237,10 +237,10 @@ const Navbar = () => {
               Home
             </a>
             <a
-              href="/courses"
+              href="/chat"
               className="block px-3 py-2 text-gray-300 hover:text-white"
             >
-              Courses
+              Chat
             </a>
             <a
               href="/chat"
@@ -249,10 +249,10 @@ const Navbar = () => {
               chat
             </a>
             <a
-              href="/contact"
+              href="/blogs"
               className="block px-3 py-2 text-gray-300 hover:text-white"
             >
-              Contact
+              Blogs
             </a>
           </div>
 
