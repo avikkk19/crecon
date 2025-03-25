@@ -84,7 +84,7 @@ const Navbar = () => {
             >
               Home
             </a>
-           
+
             <a
               href="/chat"
               className="text-gray-400 hover:text-white transition-colors"
@@ -242,12 +242,7 @@ const Navbar = () => {
             >
               Chat
             </a>
-            <a
-              href="/chat"
-              className="block px-3 py-2 text-gray-300 hover:text-white"
-            >
-              chat
-            </a>
+
             <a
               href="/blogs"
               className="block px-3 py-2 text-gray-300 hover:text-white"

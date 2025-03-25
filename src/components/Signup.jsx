@@ -172,8 +172,8 @@ const SignupForm = () => {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen flex items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+    <div className="bg-black min-h-screen flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md mt-24">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-800">Create Account</h1>
           <p className="text-gray-600">Sign up to get started</p>

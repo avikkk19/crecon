@@ -292,6 +292,7 @@ function Blog() {
         throw error;
       }
       console.log("Blog created successfully:", data);
+      alert("Blog created successfully");
 
       // Update UI and reset form
       setBlogs([...blogs, ...data]);
@@ -391,9 +392,9 @@ function Blog() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-300">
+    <div className="min-h-screen bg-gray-900 text-gray-300 ">
       {/* Header */}
-      <header className="bg-gray-800 shadow-md p-4 border-b border-gray-700">
+      <header className="bg-gray-800 shadow-md p-4 border-b border-gray-700 ">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <h1 className="text-2xl font-bold text-white">Community Blog</h1>
           <div className="flex items-center space-x-4">
@@ -482,7 +483,9 @@ function Blog() {
 
             <form onSubmit={handleSubmitBlog}>
               <div className="mb-4">
-                <label className="block text-gray-300 mb-2">Title</label>
+                <label className="block text-gray-300 mb-2">
+                  Title <p className="text-sm">(neccesory)</p>
+                </label>
                 <input
                   type="text"
                   name="title"
@@ -507,7 +510,9 @@ function Blog() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-gray-300 mb-2">Content</label>
+                <label className="block text-gray-300 mb-2">
+                  Content <p className="text-sm">(neccesory)</p>
+                </label>
                 <textarea
                   name="content"
                   value={newBlog.content}
@@ -618,7 +623,7 @@ function Blog() {
                 >
                   {uploading || creating ? (
                     <div className="flex items-center">
-                      <svg
+                      {/* <svg
                         className="animate-spin h-5 w-5 mr-2 text-white"
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
@@ -637,8 +642,8 @@ function Blog() {
                           fill="currentColor"
                           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                         ></path>
-                      </svg>
-                      Publishing...
+                      </svg> */}
+                      Submit Blog
                     </div>
                   ) : (
                     "Publish"

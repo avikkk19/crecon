@@ -597,7 +597,7 @@ function Chat() {
   return (
     <div className="flex h-screen bg-gray-900 text-gray-300">
       {/* Users sidebar */}
-      <div className="w-1/4 bg-gray-800 border-r border-gray-700 overflow-y-auto">
+      <div className="w-1/4 bg-gray-800 border-r border-gray-700 overflow-y-auto mt-18" >
         <div className="p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold text-white">Contacts</h2>
           <div className="mt-2 text-sm">
@@ -674,11 +674,11 @@ function Chat() {
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col ">
         {selectedUser ? (
           <>
             {/* Chat header */}
-            <div className="bg-gray-800 p-4 border-b border-gray-700 flex items-center">
+            <div className="bg-gray-800 p-4 border-b border-gray-700 flex items-center mt-18">
               <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white mr-3">
                 {selectedUser.avatar_url ? (
                   <img
