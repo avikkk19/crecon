@@ -67,25 +67,20 @@ function Chat() {
         // Add parsed attachment data to messages
         const messagesWithAttachments =
           data?.map((message) => {
-            // Try to parse attachment URL from content if it exists
-            try {
-              if (message.content && message.content.includes("[ATTACHMENT]")) {
-                const parts = message.content.split("[ATTACHMENT]");
-                return {
-                  ...message,
-                  content: parts[0].trim(),
-                  attachment_url: parts[1].trim(),
-                  is_attachment: true,
-                };
-              }
-            } catch (e) {
-              console.error("Error parsing attachment:", e);
+            if (message.content && message.content.includes("[ATTACHMENT]")) {
+              const parts = message.content.split("[ATTACHMENT]");
+              return {
+                ...message,
+                content: parts[0].trim(),
+                attachment_url: parts[1].trim(),
+                is_attachment: true,
+              };
             }
             return message;
           }) || [];
 
         setMessages(messagesWithAttachments);
-        // scrollToBottom();
+        scrollToBottom();
       } catch (error) {
         console.error("Error fetching messages:", error);
       }
@@ -93,44 +88,42 @@ function Chat() {
 
     fetchMessages();
 
-    // Subscribe to new messages with improved filter
+    // Subscribe to real-time updates
     const channel = supabase
-      .channel(`messages-${selectedUser.id}`) // Add user ID to make channel unique
+      .channel("realtime:messages")
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "messages",
-          filter: `or(and(sender_id.eq.${session.user.id},receiver_id.eq.${selectedUser.id}),and(sender_id.eq.${selectedUser.id},receiver_id.eq.${session.user.id}))`,
+          filter: `sender_id=eq.${selectedUser.id},receiver_id=eq.${session.user.id}`,
         },
         (payload) => {
-          const newMsg = payload.new;
+          const newMessage = payload.new;
 
-          // Check for attachment in message content
-          let processedMsg = { ...newMsg };
+          // Parse attachment if present
           if (
-            processedMsg.content &&
-            processedMsg.content.includes("[ATTACHMENT]")
+            newMessage.content &&
+            newMessage.content.includes("[ATTACHMENT]")
           ) {
-            const parts = processedMsg.content.split("[ATTACHMENT]");
-            processedMsg.content = parts[0].trim();
-            processedMsg.attachment_url = parts[1].trim();
-            processedMsg.is_attachment = true;
+            const parts = newMessage.content.split("[ATTACHMENT]");
+            newMessage.content = parts[0].trim();
+            newMessage.attachment_url = parts[1].trim();
+            newMessage.is_attachment = true;
           }
 
-          // Use a function to ensure we're working with the latest state
-          setMessages((currentMessages) => [...currentMessages, processedMsg]);
-          // scrollToBottom();
+          setMessages((prevMessages) => [...prevMessages, newMessage]);
+          scrollToBottom();
         }
       )
       .subscribe();
 
-    // Clean up subscription
+    // Cleanup subscription on unmount or when dependencies change
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [session, selectedUser]); // Only dependency should be session and selectedUser
+  }, [session, selectedUser]);
 
   useEffect(() => {
     if (messages.length > 0) {
