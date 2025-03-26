@@ -148,12 +148,12 @@ function Chat() {
     }
   }
 
-  // Scroll to bottom of messages
-  function scrollToBottom() {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-  }
+  // // Scroll to bottom of messages
+  // function scrollToBottom() {
+  //   setTimeout(() => {
+  //     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  //   }, 100);
+  // }
 
   // Upload file to storage - FIXED VERSION
   async function uploadFile(file) {

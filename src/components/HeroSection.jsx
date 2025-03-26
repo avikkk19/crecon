@@ -27,17 +27,13 @@ const HeroSection = () => {
           </div>
 
           <div className="flex gap-4 justify-center mt-10">
-            <Link to="/signup">
+            <Link to="/chat">
               <button className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                Start your journey by signing up
+                Start a conversation
               </button>
             </Link>
-            <Link to="/signin">
-              <button className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium border border-gray-700 transition-colors">
-                SIgnin
-              </button>
-            </Link>
-          </div>
+           
+          </div> 
         </div>
       </div>
 
@@ -203,7 +199,7 @@ const HeroSection = () => {
                   <div className="flex items-center">
                     <span className="text-sm font-medium">
                       Debugged errors
-                    </span>
+                    </span>chat
                     <span className="text-xs text-gray-400 ml-2">
                       by kondaReddy
                     </span>

@@ -271,12 +271,7 @@ const Navbar = () => {
                   </div>
                 </div>
                 <div className="mt-3 px-2 space-y-1">
-                  {/* <a href="/profile" className="block px-3 py-2 text-sm text-gray-300 hover:text-white">
-                    Your Profile
-                  </a>
-                  <a href="/settings" className="block px-3 py-2 text-sm text-gray-300 hover:text-white">
-                    Settings
-                  </a> */}
+                 
                   <button
                     onClick={handleSignOut}
                     className="block w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-gray-700"
