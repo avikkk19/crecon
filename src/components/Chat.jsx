@@ -44,14 +44,63 @@ function Chat() {
     }
   }, [session]);
 
-  // Load and subscribe to messages when a user is selected
+  // Real-time messages subscription
+  useEffect(() => {
+    if (!session || !selectedUser) return;
+
+    // Create a real-time channel for messages
+    const channel = supabase
+      .channel("realtime:messages")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          // Filter for messages between current user and selected user
+          filter: `or(and(sender_id.eq.${selectedUser.id},receiver_id.eq.${session.user.id}),and(sender_id.eq.${session.user.id},receiver_id.eq.${selectedUser.id}))`,
+        },
+        (payload) => {
+          // Ensure we don't add duplicate messages
+          const newMessage = payload.new;
+          setMessages((prevMessages) => {
+            // Check if message already exists
+            const messageExists = prevMessages.some(
+              (msg) => msg.id === newMessage.id
+            );
+            if (messageExists) return prevMessages;
+
+            // Parse attachment if present
+            if (
+              newMessage.content &&
+              newMessage.content.includes("[ATTACHMENT]")
+            ) {
+              const parts = newMessage.content.split("[ATTACHMENT]");
+              newMessage.content = parts[0].trim();
+              newMessage.attachment_url = parts[1].trim();
+              newMessage.is_attachment = true;
+            }
+
+            return [...prevMessages, newMessage];
+          });
+          scrollToBottom();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session, selectedUser]);
+
+  // Fetch existing messages with real-time updates
   useEffect(() => {
     if (!session || !selectedUser) return;
 
     // Clear messages when changing selected user
     setMessages([]);
 
-    // Fetch existing messages
     async function fetchMessages() {
       try {
         const { data, error } = await supabase
@@ -64,7 +113,7 @@ function Chat() {
 
         if (error) throw error;
 
-        // Add parsed attachment data to messages
+        // Parse messages with attachments
         const messagesWithAttachments =
           data?.map((message) => {
             if (message.content && message.content.includes("[ATTACHMENT]")) {
@@ -87,44 +136,9 @@ function Chat() {
     }
 
     fetchMessages();
-
-    // Subscribe to real-time updates
-    const channel = supabase
-      .channel("realtime:messages")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `sender_id=eq.${selectedUser.id},receiver_id=eq.${session.user.id}`,
-        },
-        (payload) => {
-          const newMessage = payload.new;
-
-          // Parse attachment if present
-          if (
-            newMessage.content &&
-            newMessage.content.includes("[ATTACHMENT]")
-          ) {
-            const parts = newMessage.content.split("[ATTACHMENT]");
-            newMessage.content = parts[0].trim();
-            newMessage.attachment_url = parts[1].trim();
-            newMessage.is_attachment = true;
-          }
-
-          setMessages((prevMessages) => [...prevMessages, newMessage]);
-          scrollToBottom();
-        }
-      )
-      .subscribe();
-
-    // Cleanup subscription on unmount or when dependencies change
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [session, selectedUser]);
 
+  // Scroll to bottom when messages change
   useEffect(() => {
     if (messages.length > 0) {
       scrollToBottom();
