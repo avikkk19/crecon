@@ -85,7 +85,7 @@ function Chat() {
           }) || [];
 
         setMessages(messagesWithAttachments);
-        scrollToBottom();
+        // scrollToBottom();
       } catch (error) {
         console.error("Error fetching messages:", error);
       }
@@ -121,7 +121,7 @@ function Chat() {
 
           // Use a function to ensure we're working with the latest state
           setMessages((currentMessages) => [...currentMessages, processedMsg]);
-          scrollToBottom();
+          // scrollToBottom();
         }
       )
       .subscribe();
@@ -131,6 +131,12 @@ function Chat() {
       supabase.removeChannel(channel);
     };
   }, [session, selectedUser]); // Only dependency should be session and selectedUser
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages]);
 
   // Fetch all user profiles except current user
   async function fetchProfiles() {
@@ -148,12 +154,12 @@ function Chat() {
     }
   }
 
-  // // Scroll to bottom of messages
-  // function scrollToBottom() {
-  //   setTimeout(() => {
-  //     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  //   }, 100);
-  // }
+  // Scroll to the bottom of the messages
+  function scrollToBottom() {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  }
 
   // Upload file to storage - FIXED VERSION
   async function uploadFile(file) {
@@ -387,7 +393,7 @@ function Chat() {
       }
 
       setMessages((messages) => [...messages, optimisticMessage]);
-      scrollToBottom();
+      scrollToBottom(); // Scroll to the bottom after adding a new message
       setNewMessage("");
       setFilePreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -597,7 +603,7 @@ function Chat() {
   return (
     <div className="flex h-screen bg-gray-900 text-gray-300">
       {/* Users sidebar */}
-      <div className="w-1/4 bg-gray-800 border-r border-gray-700 overflow-y-auto mt-18" >
+      <div className="w-1/4 bg-gray-800 border-r border-gray-700 overflow-y-auto mt-18">
         <div className="p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold text-white">Contacts</h2>
           <div className="mt-2 text-sm">
@@ -674,7 +680,7 @@ function Chat() {
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 flex flex-col ">
+      <div className="flex-1 flex flex-col">
         {selectedUser ? (
           <>
             {/* Chat header */}
@@ -873,9 +879,15 @@ function Chat() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-500">
-            Select a user to start chatting
-          </div>
+          <>
+            <div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-500">
+              Select a user to start chatting
+            </div>
+            {/* Footer */}
+            <footer className="bg-gray-800 text-gray-400 text-center py-2">
+              © 2023 CollabEdit. All rights reserved.
+            </footer>
+          </>
         )}
       </div>
     </div>
