@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 // Replace with your Supabase URL and anon key
 import { supabase } from "./SupabaseClient.jsx";
@@ -20,6 +20,8 @@ function Chat() {
   const [searchTerm, setSearchTerm] = useState(""); // Add search term state
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const channelRef = useRef(null);
+  const updateIntervalRef = useRef(null);
 
   // Check auth state
   useEffect(() => {
@@ -44,27 +46,87 @@ function Chat() {
     }
   }, [session]);
 
-  // Real-time messages subscription
-  useEffect(() => {
+  // Establish real-time connection with frequent polling
+  const setupRealTimeUpdates = useCallback(() => {
+    // Clear any existing interval
+    if (updateIntervalRef.current) {
+      clearInterval(updateIntervalRef.current);
+    }
+
+    // Disconnect any existing channel
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
     if (!session || !selectedUser) return;
 
-    // Create a real-time channel for messages
-    const channel = supabase
-      .channel("realtime:messages")
+    // Create a new real-time channel
+    const channel = supabase.channel("realtime:messages");
+    channelRef.current = channel;
+
+    // Polling function to fetch latest messages
+    const pollMessages = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("messages")
+          .select("*")
+          .or(
+            `and(sender_id.eq.${selectedUser.id},receiver_id.eq.${session.user.id}),and(sender_id.eq.${session.user.id},receiver_id.eq.${selectedUser.id})`
+          )
+          .order("created_at", { ascending: true });
+
+        if (error) throw error;
+
+        // Parse and update messages
+        const processedMessages = (data || []).map((message) => {
+          if (message.content && message.content.includes("[ATTACHMENT]")) {
+            const parts = message.content.split("[ATTACHMENT]");
+            return {
+              ...message,
+              content: parts[0].trim(),
+              attachment_url: parts[1].trim(),
+              is_attachment: true,
+            };
+          }
+          return message;
+        });
+
+        // Update messages state, avoiding duplicates
+        setMessages((prevMessages) => {
+          const existingMessageIds = new Set(prevMessages.map((m) => m.id));
+          const newMessages = processedMessages.filter(
+            (message) => !existingMessageIds.has(message.id)
+          );
+          return newMessages.length > 0
+            ? [...prevMessages, ...newMessages]
+            : prevMessages;
+        });
+      } catch (error) {
+        console.error("Error polling messages:", error);
+      }
+    };
+
+    // Initial poll
+    pollMessages();
+
+    // Set up interval for continuous polling (every second)
+    updateIntervalRef.current = setInterval(pollMessages, 1000);
+
+    // Real-time listener as a backup
+    channel
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "messages",
-          // Filter for messages between current user and selected user
           filter: `or(and(sender_id.eq.${selectedUser.id},receiver_id.eq.${session.user.id}),and(sender_id.eq.${session.user.id},receiver_id.eq.${selectedUser.id}))`,
         },
         (payload) => {
-          // Ensure we don't add duplicate messages
           const newMessage = payload.new;
+
+          // Prevent duplicate messages
           setMessages((prevMessages) => {
-            // Check if message already exists
             const messageExists = prevMessages.some(
               (msg) => msg.id === newMessage.id
             );
@@ -83,16 +145,38 @@ function Chat() {
 
             return [...prevMessages, newMessage];
           });
-          scrollToBottom();
         }
       )
       .subscribe();
 
-    // Cleanup subscription
+    // Cleanup function
     return () => {
-      supabase.removeChannel(channel);
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+      }
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
     };
   }, [session, selectedUser]);
+
+  // Set up real-time updates when session or selected user changes
+  useEffect(() => {
+    const cleanup = setupRealTimeUpdates();
+    return cleanup;
+  }, [setupRealTimeUpdates]);
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+      }
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+    };
+  }, []);
 
   // Fetch existing messages with real-time updates
   useEffect(() => {
