@@ -33,19 +33,19 @@ const Footer = () => {
               <ul className="space-y-2">
                 <li>
                   <a href="/python-sdk" className="hover:text-white">
-                    Python SDK
+                    Supabase CLI
                   </a>
                 </li>
                 <li>
                   <a href="/js-sdk" className="hover:text-white">
-                    JS/TS SDK
-                  </a>
+                    React.js SDK                 </a>
                 </li>
                 <li>
-                  <a href="/openai-sdk" className="hover:text-white">
-                    anthropic
+                  <a href="/" className="hover:text-white">
+                    Node.js
                   </a>
                 </li>
+                  <a href="https://github.com/avikkk19/notyetnamed" className="text-xs hover:text-white">visit github instead</a>
               </ul>
             </div>
 
@@ -53,17 +53,17 @@ const Footer = () => {
               <h3 className="text-white font-medium mb-4">Resources</h3>
               <ul className="space-y-2">
                 <li>
-                  <a href="/docs" className="hover:text-white">
+                  <a href="/" className="hover:text-white">
                     Documentation
                   </a>
                 </li>
                 <li>
-                  <a href="/interactive-demo" className="hover:text-white">
+                  <a href="/" className="hover:text-white">
                     Interactive Demo
                   </a>
                 </li>
                 <li>
-                  <a href="/video-demo" className="hover:text-white">
+                  <a href="/" className="hover:text-white">
                     Video demo (10 min)
                   </a>
                 </li>
@@ -74,17 +74,17 @@ const Footer = () => {
               <h3 className="text-white font-medium mb-4">About</h3>
               <ul className="space-y-2">
                 <li>
-                  <a href="/blog" className="hover:text-white">
+                  <a href="/" className="hover:text-white">
                     Blog
                   </a>
                 </li>
                 <li>
-                  <a href="/careers" className="hover:text-white">
+                  <a href="/" className="hover:text-white">
                     Careers
                   </a>
                 </li>
                 <li>
-                  <a href="/about-us" className="hover:text-white">
+                  <a href="/" className="hover:text-white">
                     About us
                   </a>
                 </li>
@@ -95,17 +95,17 @@ const Footer = () => {
               <h3 className="text-white font-medium mb-4">Legal</h3>
               <ul className="space-y-2">
                 <li>
-                  <a href="/security" className="hover:text-white">
+                  <a href="/" className="hover:text-white">
                     Security
                   </a>
                 </li>
                 <li>
-                  <a href="/terms" className="hover:text-white">
+                  <a href="/" className="hover:text-white">
                     Terms
                   </a>
                 </li>
                 <li>
-                  <a href="/privacy" className="hover:text-white">
+                  <a href="/" className="hover:text-white">
                     Privacy
                   </a>
                 </li>
@@ -114,7 +114,8 @@ const Footer = () => {
           </div>
 
           <div className="mt-12 pt-8 border-t border-gray-800 text-sm">
-            <p>© 2022-2025 avinash, viggu Inc.</p>
+            <p>© 2022-2025 Avinash</p>
+            <p>Dev is a bit studid  && <a href="https://instagram.com/spidey33x_" className="hover:text-white">spidey33x_ </a> in case if you wanna conatct</p>
           </div>
         </div>
       </footer>

@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-
-// Replace with your Supabase URL and anon key
 import { supabase } from "./SupabaseClient.jsx";
 
-// Maximum file size in bytes (8MB)
+// Constants
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
-// Bucket name constant
 const BUCKET_NAME = "chat-media";
 
+// Part 1: Core Chat Component and State Management
 function Chat() {
+  // State management
   const [session, setSession] = useState(null);
   const [profiles, setProfiles] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -18,33 +17,33 @@ function Chat() {
   const [uploading, setUploading] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [darkMode, setDarkMode] = useState(true);
+
+  // Refs
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const channelRef = useRef(null);
   const updateIntervalRef = useRef(null);
+  const chatContainerRef = useRef(null);
 
-  // Define getOrCreateConversation only once
+  // Conversation management
   async function getOrCreateConversation(user1Id, user2Id) {
     try {
       // Check if conversation exists
-      const { data: existingConversations, error: fetchError } =
-        await supabase
-          .from("conversation_participants")
-          .select("conversation_id")
-          .in("user_id", [user1Id, user2Id])
-          .order("conversation_id");
+      const { data: existingConversations, error: fetchError } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id")
+        .in("user_id", [user1Id, user2Id])
+        .order("conversation_id");
 
       if (fetchError) throw fetchError;
 
       // Group by conversation_id and find one with both users
       if (existingConversations.length > 0) {
-        const conversationCounts = existingConversations.reduce(
-          (acc, curr) => {
-            acc[curr.conversation_id] = (acc[curr.conversation_id] || 0) + 1;
-            return acc;
-          },
-          {}
-        );
+        const conversationCounts = existingConversations.reduce((acc, curr) => {
+          acc[curr.conversation_id] = (acc[curr.conversation_id] || 0) + 1;
+          return acc;
+        }, {});
 
         for (const [convId, count] of Object.entries(conversationCounts)) {
           if (count >= 2) return convId; // Found conversation with both users
@@ -76,7 +75,7 @@ function Chat() {
     }
   }
 
-  // Check auth state
+  // Authentication and session management
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -99,6 +98,53 @@ function Chat() {
     }
   }, [session]);
 
+  // Fetch all user profiles except current user
+  async function fetchProfiles() {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .neq("id", session.user.id);
+
+      if (error) throw error;
+
+      setProfiles(data || []);
+    } catch (error) {
+      console.error("Error fetching profiles:", error);
+    }
+  }
+
+  // Scroll to the bottom of the messages
+  function scrollToBottom() {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  }
+
+  // Format timestamp
+  function formatTime(timestamp) {
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  // Simple login function for testing
+  async function handleLogin() {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: "test@example.com",
+        password: "password123",
+      });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("Error logging in");
+    }
+  }
+
+  // Part 2: Message Management, Real-time Updates, and File Handling
   // Establish real-time connection with frequent polling
   const setupRealTimeUpdates = useCallback(() => {
     // Clear any existing interval
@@ -124,12 +170,12 @@ function Chat() {
           session.user.id,
           selectedUser.id
         );
-        
+
         if (!conversationId) {
           console.error("Failed to get or create conversation");
           return;
         }
-        
+
         const { data, error } = await supabase
           .from("messages")
           .select("*")
@@ -184,14 +230,14 @@ function Chat() {
         },
         async (payload) => {
           const newMessage = payload.new;
-          
+
           // Check if message belongs to current conversation
           if (session && selectedUser) {
             const conversationId = await getOrCreateConversation(
               session.user.id,
               selectedUser.id
             );
-            
+
             if (newMessage.conversation_id === conversationId) {
               // Prevent duplicate messages
               setMessages((prevMessages) => {
@@ -254,19 +300,19 @@ function Chat() {
 
     // Clear messages when changing selected user
     setMessages([]);
-    
+
     async function fetchMessages() {
       try {
         const conversationId = await getOrCreateConversation(
-          session.user.id, 
+          session.user.id,
           selectedUser.id
         );
-        
+
         if (!conversationId) {
           console.error("Failed to get conversation ID");
           return;
         }
-        
+
         // Fetch messages for this conversation
         const { data, error } = await supabase
           .from("messages")
@@ -307,29 +353,6 @@ function Chat() {
       // scrollToBottom();
     }
   }, [messages]);
-
-  // Fetch all user profiles except current user
-  async function fetchProfiles() {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .neq("id", session.user.id);
-
-      if (error) throw error;
-
-      setProfiles(data || []);
-    } catch (error) {
-      console.error("Error fetching profiles:", error);
-    }
-  }
-
-  // Scroll to the bottom of the messages
-  function scrollToBottom() {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-  }
 
   // Upload file to storage
   async function uploadFile(file) {
@@ -387,6 +410,7 @@ function Chat() {
     }
   }
 
+  // Part 3: UI Components, Message Rendering and Event Handlers
   // Handle file selection
   function handleFileSelect(e) {
     const file = e.target.files[0];
@@ -475,7 +499,7 @@ function Chat() {
 
     if (url.match(/\.(jpeg|jpg|gif|png)$/i)) {
       return (
-        <div className="mt-2 max-w-xs overflow-hidden rounded">
+        <div className="mt-2 max-w-xs overflow-hidden rounded-lg">
           <img
             src={url}
             alt="Attachment"
@@ -492,7 +516,7 @@ function Chat() {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center p-2 bg-black rounded"
+            className="flex items-center p-2 bg-gray-800 rounded-lg transition-colors duration-150 hover:bg-gray-700"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -574,7 +598,7 @@ function Chat() {
       }
 
       setMessages((messages) => [...messages, optimisticMessage]);
-      // scrollToBottom(); // Scroll to the bottom after adding a new message
+      // scrollToBottom();
       setNewMessage("");
       setFilePreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -620,56 +644,43 @@ function Chat() {
     }
   }
 
-  // Format timestamp
-  function formatTime(timestamp) {
-    return new Date(timestamp).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
+  // Toggle dark/light mode
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
 
-  // Simple login function for testing
-  async function handleLogin() {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: "test@example.com",
-        password: "password123",
-      });
+  const themeClass = "bg-black text-gray-100"; // Black background with light text
 
-      if (error) throw error;
-    } catch (error) {
-      console.error("Login error:", error);
-      alert("Error logging in");
-    }
-  }
+  const sidebarClass = "bg-black border-gray-700"; // Sidebar with black background
 
-  // Load selected user from session storage on mount
-  useEffect(() => {
-    const storedUser = sessionStorage.getItem("selectedUser");
-    if (storedUser) {
-      setSelectedUser(JSON.parse(storedUser));
-      sessionStorage.removeItem("selectedUser");
-    }
-  }, []);
+  const messageInputClass = "bg-black border-gray-600 focus:ring-white-500"; // Message input with dark gray background
+
+  const buttonClass = "bg-green-600 hover:bg-indigo-700"; // Buttons with indigo color
+
+  const myMessageClass = "bg-gray-800 text-white"; // Messages sent by the user
+
+  const otherMessageClass = "bg-zinc-900 text-gray-100"; // Messages received from others
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-black text-gray-300">
-        Loading...
+      <div className="flex items-center justify-center h-screen bg-gradient-to-r from-indigo-900 to-purple-900 text-white">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mb-4"></div>
+          <p className="text-xl font-medium">Loading chat...</p>
+        </div>
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="flex items-center justify-center h-screen bg-black">
-        <div className="text-center text-gray-300">
-          <h1 className="text-2xl font-bold mb-4">
-            Please sign in to use the chat
-          </h1>
+      <div className="flex items-center justify-center h-screen bg-gradient-to-r from-indigo-900 to-purple-900">
+        <div className="bg-gray-800 p-8 rounded-xl shadow-2xl text-center text-white max-w-md w-full">
+          <h1 className="text-3xl font-bold mb-6">Welcome to ChatterHub</h1>
+          <p className="mb-8 text-gray-300">Please sign in to continue</p>
           <button
             onClick={handleLogin}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded"
+            className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-lg font-medium text-lg transition-all hover:from-purple-700 hover:to-indigo-700 hover:shadow-xl"
           >
             Sign In (Test Account)
           </button>
@@ -679,80 +690,156 @@ function Chat() {
   }
 
   return (
-    <div className="flex h-screen bg-black text-gray-300">
+    <div
+      className={`flex h-screen ${themeClass} transition-colors duration-200 mt-18`}
+    >
       {/* Users sidebar */}
-      <div className="w-1/4 bg-black border-r border-gray-700 overflow-y-auto">
-        <div className="p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">Contacts</h2>
-          <div className="mt-2 text-sm">
-            <p>Logged in as: {session.user.email}</p>
+      <div
+        className={`w-1/4 ${sidebarClass} border-r overflow-y-auto transition-colors duration-200`}
+      >
+        <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+          <div>
+            <h2 className="text-xl font-bold">loged in as</h2>
+            <div className="mt-1 text-sm opacity-75">
+              <p>{session.user.email}</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-3">
+        
             <button
               onClick={() => supabase.auth.signOut()}
-              className="text-red-400 hover:text-red-300"
+              className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-gray-700 transition-colors"
             >
-              Sign Out
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
             </button>
           </div>
         </div>
 
         <div className="p-4">
-          <input
-            type="text"
-            placeholder="Search users..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full rounded-lg border border-gray-700 bg-gray-700 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-white text-white"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search contacts..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full rounded-lg ${messageInputClass} py-2 pl-10 pr-4 focus:outline-none focus:ring-2 transition-colors duration-200`}
+            />
+            <div className="absolute left-3 top-2.5">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+          </div>
         </div>
 
         <div>
           {profiles.length === 0 ? (
-            <div className="p-4 text-gray-500">
-              No users found. Make sure there are other users in your profiles
-              table.
+            <div className="p-4 text-gray-500 text-center">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-12 w-12 mx-auto text-gray-400 mb-2"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+              No contacts found
             </div>
           ) : (
-            profiles
-              .filter((profile) =>
-                profile.username
-                  ?.toLowerCase()
-                  .includes(searchTerm.toLowerCase())
-              )
-              .map((profile) => (
-                <div
-                  key={profile.id}
-                  className={`p-4 cursor-pointer hover:bg-gray-700 flex items-center ${
-                    selectedUser?.id === profile.id ? "bg-black" : ""
-                  }`}
-                  onClick={() => setSelectedUser(profile)}
-                >
-                  <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-white mr-3">
-                    {profile.avatar_url ? (
-                      <img
-                        src={profile.avatar_url}
-                        alt={profile.username}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      (profile.username || profile.full_name || "User")
-                        .charAt(0)
-                        .toUpperCase()
-                    )}
-                  </div>
-                  <div>
-                    <div className="font-medium text-white">
-                      {profile.username ||
-                        profile.full_name ||
-                        "Anonymous User"}
+            <div className="space-y-1 px-2">
+              {profiles
+                .filter((profile) =>
+                  profile.username
+                    ?.toLowerCase()
+                    .includes(searchTerm.toLowerCase())
+                )
+                .map((profile) => (
+                  <div
+                    key={profile.id}
+                    className={`p-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center ${
+                      selectedUser?.id === profile.id
+                        ? darkMode
+                          ? "bg-gray-900"
+                          : "bg-indigo-50"
+                        : "hover:bg-opacity-10 hover:bg-gray-500"
+                    }`}
+                    onClick={() => setSelectedUser(profile)}
+                  >
+                    <div
+                      className={`w-12 h-12 rounded-full flex items-center justify-center text-white mr-3 ${
+                        darkMode
+                          ? "bg-gray-600"
+                          : "bg-indigo-100 text-indigo-500"
+                      }`}
+                    >
+                      {profile.avatar_url ? (
+                        <img
+                          src={profile.avatar_url}
+                          alt={profile.username}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-lg font-medium">
+                          {(profile.username || profile.full_name || "User")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </span>
+                      )}
                     </div>
-                    {profile.username && profile.full_name && (
-                      <div className="text-sm text-gray-400">
-                        {profile.full_name}
+                    <div>
+                      <div className="font-medium">
+                        {profile.username ||
+                          profile.full_name ||
+                          "Anonymous User"}
+                      </div>
+                      {profile.username && profile.full_name && (
+                        <div className="text-sm opacity-75">
+                          {profile.full_name}
+                        </div>
+                      )}
+                    </div>
+                    {selectedUser?.id === profile.id && (
+                      <div className="ml-auto">
+                        <div
+                          className={`w-3 h-3 rounded-full ${
+                            darkMode ? "bg-indigo-400" : "bg-indigo-500"
+                          }`}
+                        ></div>
                       </div>
                     )}
                   </div>
-                </div>
-              ))
+                ))}
+            </div>
           )}
         </div>
       </div>
@@ -762,8 +849,18 @@ function Chat() {
         {selectedUser ? (
           <>
             {/* Chat header */}
-            <div className="bg-black p-4 border-b border-gray-700 flex items-center">
-              <div className="w-10 h-10 bg-black rounded-full flex items-center justify-center text-white mr-3">
+            <div
+              className={`${
+                darkMode ? "bg-gray-800" : "bg-white"
+              } p-4 border-b ${
+                darkMode ? "border-gray-700" : "border-gray-200"
+              } flex items-center transition-colors duration-200`}
+            >
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-white mr-3 ${
+                  darkMode ? "bg-gray-600" : "bg-indigo-100 text-indigo-500"
+                }`}
+              >
                 {selectedUser.avatar_url ? (
                   <img
                     src={selectedUser.avatar_url}
@@ -771,19 +868,21 @@ function Chat() {
                     className="w-10 h-10 rounded-full object-cover"
                   />
                 ) : (
-                  (selectedUser.username || selectedUser.full_name || "User")
-                    .charAt(0)
-                    .toUpperCase()
+                  <span className="text-lg font-medium">
+                    {(selectedUser.username || selectedUser.full_name || "User")
+                      .charAt(0)
+                      .toUpperCase()}
+                  </span>
                 )}
               </div>
               <div>
-                <div className="font-medium text-lg text-white">
+                <div className="font-medium">
                   {selectedUser.username ||
                     selectedUser.full_name ||
                     "Anonymous User"}
                 </div>
                 {selectedUser.username && selectedUser.full_name && (
-                  <div className="text-sm text-gray-400">
+                  <div className="text-sm opacity-75">
                     {selectedUser.full_name}
                   </div>
                 )}
@@ -791,120 +890,159 @@ function Chat() {
             </div>
 
             {/* Messages area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-black">
+            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto">
               {messages.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-gray-500">
-                  No messages yet. Start a conversation!
-                </div>
-              ) : (
-                messages.map((message) => (
+                <div className="h-full flex flex-col items-center justify-center text-center">
                   <div
-                    key={message.id}
-                    className={`mb-4 flex ${
-                      message.sender_id === session.user.id
-                        ? "justify-end"
-                        : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`max-w-xs md:max-w-md lg:max-w-lg rounded-lg px-4 py-2 ${
-                        message.sender_id === session.user.id
-                          ? "bg-blue-400 text-white"
-                          : "bg-gray-800 text-gray-300"
-                      } ${message.is_optimistic ? "opacity-70" : ""}`}
-                    >
-                      <div>{processContent(message.content)}</div>
-                      {message.attachment_url &&
-                        renderAttachment(message.attachment_url)}
-                      <div
-                        className={`text-xs mt-1 ${
-                          message.sender_id === session.user.id
-                            ? "text-black"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        {formatTime(message.created_at)}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Message input */}
-            <div className="bg-black p-4 border-t border-gray-700">
-              {filePreview && (
-                <div className="mb-2 p-2 bg-black rounded flex items-center justify-between">
-                  <div className="flex items-center">
-                    {filePreview.type === "image" ? (
-                      <img
-                        src={filePreview.url}
-                        alt="Preview"
-                        className="h-12 w-12 object-cover rounded mr-2"
-                      />
-                    ) : (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-6 w-6 mr-2 text-gray-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                    )}
-                    <span
-                      className="text-gray-300 truncate"
-                      style={{ maxWidth: "200px" }}
-                    >
-                      {filePreview.name}
-                    </span>
-                  </div>
-                  <button
-                    onClick={cancelFileUpload}
-                    className="text-gray-400 hover:text-gray-300"
+                    className={`p-4 rounded-full ${
+                      darkMode ? "bg-gray-800" : "bg-gray-100"
+                    } mb-4`}
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
+                      className="h-10 w-10 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
                     >
                       <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                        clipRule="evenodd"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-medium">Start a conversation</p>
+                  <p className="text-sm opacity-75 max-w-xs mt-2">
+                    Send a message to begin chatting with{" "}
+                    {selectedUser.username || "this user"}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {messages.map((message, index) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${
+                        message.sender_id === session.user.id
+                          ? "justify-end"
+                          : "justify-start"
+                      }`}
+                    >
+                      <div
+                        className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 rounded-lg ${
+                          message.sender_id === session.user.id
+                            ? myMessageClass
+                            : otherMessageClass
+                        } ${message.is_optimistic ? "opacity-50" : ""}`}
+                      >
+                        <div className="whitespace-pre-wrap break-words">
+                          {processContent(message.content)}
+                        </div>
+                        {message.is_attachment &&
+                          renderAttachment(message.attachment_url)}
+                        <div className="text-xs opacity-75 text-right mt-1">
+                          {formatTime(message.created_at)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+
+            {/* File preview */}
+            {filePreview && (
+              <div
+                className={`p-2 ${
+                  darkMode ? "bg-gray-800" : "bg-gray-100"
+                } border-t ${darkMode ? "border-gray-700" : "border-gray-200"}`}
+              >
+                <div className="flex items-center">
+                  <div className="flex-1 flex items-center">
+                    {filePreview.type === "image" ? (
+                      <div className="w-12 h-12 mr-3">
+                        <img
+                          src={filePreview.url}
+                          alt="Preview"
+                          className="w-12 h-12 object-cover rounded"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className={`w-12 h-12 rounded flex items-center justify-center mr-3 ${
+                          darkMode ? "bg-gray-700" : "bg-gray-200"
+                        }`}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-6 w-6 text-gray-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                      </div>
+                    )}
+                    <div className="truncate">
+                      <div className="font-medium truncate">
+                        {filePreview.name}
+                      </div>
+                      {uploading && (
+                        <div className="w-full bg-gray-700 rounded-full h-1.5 mt-1">
+                          <div className="bg-indigo-500 h-1.5 rounded-full w-1/2 animate-pulse"></div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={cancelFileUpload}
+                    className="ml-2 p-1 rounded-full hover:bg-gray-700"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
                       />
                     </svg>
                   </button>
                 </div>
-              )}
-              <form onSubmit={sendMessage} className="flex">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
-                  disabled={uploading}
-                  className="flex-1 rounded-l-lg border border-gray-700 bg-gray-700 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-white text-white"
-                />
+              </div>
+            )}
+
+            {/* Message input */}
+            <div
+              className={`p-4 ${
+                darkMode ? "bg-gray-800" : "bg-white"
+              } border-t ${
+                darkMode ? "border-gray-700" : "border-gray-200"
+              } transition-colors duration-200`}
+            >
+              <form onSubmit={sendMessage} className="flex items-center">
                 <button
                   type="button"
-                  onClick={() =>
-                    fileInputRef.current && fileInputRef.current.click()
-                  }
-                  disabled={uploading}
-                  className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 border-t border-b border-gray-700"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 mr-2"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
+                    className="h-6 w-6"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -916,94 +1054,70 @@ function Chat() {
                       d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
                     />
                   </svg>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  /><input
+                </button>
+                <input
                   type="file"
                   ref={fileInputRef}
-                  onChange={handleFileSelect}
                   className="hidden"
+                  onChange={handleFileSelect}
                 />
-              </button>
-              <button
-                type="submit"
-                disabled={(!newMessage.trim() && !filePreview) || uploading}
-                className={`rounded-r-lg px-4 py-2 ${
-                  uploading || (!newMessage.trim() && !filePreview)
-                    ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                    : "bg-purple-600 hover:bg-purple-700 text-white"
-                }`}
-              >
-                {uploading ? (
-                  <svg
-                    className="animate-spin h-5 w-5"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z"
-                      clipRule="evenodd"
-                      transform="rotate(180 10 10)"
-                    />
-                  </svg>
-                )}
-              </button>
-            </form>
-          </div>
-        </>
-      ) : (
-        <div className="flex items-center justify-center h-full text-gray-500">
-          <div className="text-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-12 w-12 mx-auto text-gray-400 mb-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+                <input
+                  type="text"
+                  placeholder="Type a message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  disabled={uploading}
+                  className={`flex-1 rounded-lg ${messageInputClass} py-2 px-4 focus:outline-none focus:ring-2 transition-colors duration-200`}
+                />
+                <button
+                  type="submit"
+                  disabled={uploading || (!newMessage.trim() && !filePreview)}
+                  className={`ml-2 px-4 py-2 rounded-lg text-white ${buttonClass} disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200`}
+                >
+                  {uploading ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      <span>Sending...</span>
+                    </div>
+                  ) : (
+                    "Send"
+                  )}
+                </button>
+              </form>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div
+              className={`p-6 rounded-full ${
+                darkMode ? "bg-gray-800" : "bg-gray-100"
+              } mb-4`}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-              />
-            </svg>
-            <p className="text-xl font-medium">Select a contact to start chatting</p>
-            <p className="mt-2 max-w-md text-sm">
-              Choose from your contacts list on the left to begin a conversation
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-14 w-14 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
+                />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold">Select a Conversation</h2>
+            <p className="text-gray-400 mt-2 text-center max-w-md px-4">
+              Choose a contact from the sidebar to start chatting or continue a
+              previous conversation.
             </p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
 }
 
 export default Chat;

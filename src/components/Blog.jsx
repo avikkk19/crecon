@@ -422,7 +422,7 @@ function Blog() {
           <div className="mb-6 flex justify-end">
             <button
               onClick={() => setCreating(true)}
-              className="bg-white hover:bg-black hover:text-white text-black px-4 py-2 rounded-lg"
+              className="bg-zinc-900 hover:bg-gray-800 hover:text-white text-white px-4 py-2 rounded-lg"
             >
               Create New Blog Post
             </button>

@@ -72,7 +72,7 @@ const Navbar = () => {
         {/* Logo - Fixed width to prevent shifting */}
         <div className="flex items-center w-1/4">
           <img src={logo} alt="Logo" className="h-8 w-auto" />
-          <span className="ml-2 font-semibold text-gray-300">CollabEdit</span>
+          <span className="ml-2 font-semibold text-gray-300">moongdal</span>
         </div>
 
         {/* Navigation Links - Fixed position in center */}
