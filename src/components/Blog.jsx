@@ -382,7 +382,7 @@ function Blog() {
           </h1>
           <button
             onClick={handleLogin}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded"
+            className="bg-black hover:bg-zinc-700 text-white px-4 py-2 rounded"
           >
             Sign In (Test Account)
           </button>
@@ -392,9 +392,9 @@ function Blog() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-300 ">
+    <div className="min-h-screen bg-black text-gray-300 ">
       {/* Header */}
-      <header className="bg-gray-800 shadow-md p-4 border-b border-gray-700 ">
+      <header className="bg-black shadow-md p-4 border-b border-gray-700 ">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <h1 className="text-2xl font-bold text-white">Community Blog</h1>
           <div className="flex items-center space-x-4">
@@ -407,7 +407,7 @@ function Blog() {
             </button>
             <a
               href="/chat"
-              className="text-purple-400 hover:text-purple-300 text-sm"
+              className="text-white hover:text-zinc-300 text-sm"
             >
               Go to Chat
             </a>
@@ -422,7 +422,7 @@ function Blog() {
           <div className="mb-6 flex justify-end">
             <button
               onClick={() => setCreating(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg"
+              className="bg-white hover:bg-black hover:text-white text-black px-4 py-2 rounded-lg"
             >
               Create New Blog Post
             </button>
@@ -434,7 +434,7 @@ function Blog() {
           <div className="mb-6">
             <button
               onClick={() => setSelectedBlog(null)}
-              className="flex items-center text-purple-400 hover:text-purple-300"
+              className="flex items-center text-white hover:text-zinc-300"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -455,7 +455,7 @@ function Blog() {
 
         {/* Blog creation form */}
         {creating && (
-          <div className="mb-8 bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-700">
+          <div className="mb-8 bg-black rounded-lg p-6 shadow-lg border border-gray-700">
             <h2 className="text-xl font-bold text-white mb-4">
               Create New Blog Post
             </h2>
@@ -529,7 +529,7 @@ function Blog() {
                 </label>
 
                 {imagePreview ? (
-                  <div className="mb-2 p-2 bg-gray-700 rounded flex items-center justify-between">
+                  <div className="mb-2 p-2 bg-black rounded flex items-center justify-between">
                     <div className="flex items-center">
                       <img
                         src={imagePreview.url}
@@ -560,7 +560,7 @@ function Blog() {
                           clipRule="evenodd"
                         />
                       </svg>
-                    </button>
+                    </button> 
                   </div>
                 ) : (
                   <div className="flex items-center">
@@ -656,7 +656,7 @@ function Blog() {
 
         {/* Blog detail view */}
         {selectedBlog && (
-          <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden border border-gray-700">
+          <div className="bg-black rounded-lg shadow-lg overflow-hidden border border-zinc-700">
             {/* Cover image */}
             {selectedBlog.image_url && (
               <div className="w-full h-64 md:h-96 overflow-hidden">
@@ -683,7 +683,7 @@ function Blog() {
               <div className="flex items-center mb-6 text-gray-400">
                 <div className="flex items-center">
                   {profiles[selectedBlog.author_id] && (
-                    <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white mr-3">
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white mr-3">
                       {profiles[selectedBlog.author_id].avatar_url ? (
                         <img
                           src={profiles[selectedBlog.author_id].avatar_url}
@@ -722,7 +722,7 @@ function Blog() {
                     onClick={() =>
                       startChatWithAuthor(selectedBlog, selectedBlog.author_id)
                     }
-                    className="ml-auto bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center"
+                    className="ml-auto bg-dark hover:bg-zinc-700 text-white px-4 py-2 rounded-lg flex items-center"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -768,7 +768,7 @@ function Blog() {
                 <p className="text-gray-400 mb-4">No blog posts yet</p>
                 <button
                   onClick={() => setCreating(true)}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg"
+                  className="bg-black hover:bg-zinc-700 text-white px-4 py-2 rounded-lg"
                 >
                   Create the first post
                 </button>
@@ -777,7 +777,7 @@ function Blog() {
               blogs.map((blog) => (
                 <div
                   key={blog.id}
-                  className="bg-gray-800 rounded-lg overflow-hidden shadow-lg border border-gray-700 flex flex-col hover:border-purple-500 transition-colors duration-200"
+                  className="bg-gray-800 rounded-lg overflow-hidden shadow-lg border border-gray-700 flex flex-col hover:border-gray-900 transition-colors duration-200"
                 >
                   {/* Blog card image */}
                   <div
@@ -818,7 +818,7 @@ function Blog() {
                   {/* Card content */}
                   <div className="p-5 flex-1 flex flex-col">
                     <h3
-                      className="text-xl font-bold text-white mb-2 cursor-pointer hover:text-purple-400"
+                      className="text-xl font-bold text-white mb-2 cursor-pointer hover:text-zinc-400"
                       onClick={() => openBlogDetail(blog)}
                     >
                       {blog.title}
@@ -836,7 +836,7 @@ function Blog() {
                     <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-700">
                       <div className="flex items-center">
                         {profiles[blog.author_id] && (
-                          <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white mr-2">
+                          <div className="w-8 h-8 bg-zinc-600 rounded-full flex items-center justify-center text-white mr-2">
                             {profiles[blog.author_id].avatar_url ? (
                               <img
                                 src={profiles[blog.author_id].avatar_url}
@@ -873,7 +873,7 @@ function Blog() {
                     <div className="flex mt-3 space-x-2">
                       <button
                         onClick={() => openBlogDetail(blog)}
-                        className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-1 px-3 rounded-lg text-sm flex items-center justify-center"
+                        className="flex-1 bg-zinc-700 hover:bg-gray-900 text-white py-1 px-3 rounded-lg text-sm flex items-center justify-center"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -904,7 +904,7 @@ function Blog() {
                           onClick={() =>
                             startChatWithAuthor(blog, blog.author_id)
                           }
-                          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-1 px-3 rounded-lg text-sm flex items-center justify-center"
+                          className="flex-1 bg-zinc-700 hover:bg-gray-900 text-white py-1 px-3 rounded-lg text-sm flex items-center justify-center"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"

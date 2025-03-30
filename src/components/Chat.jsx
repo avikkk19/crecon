@@ -17,11 +17,64 @@ function Chat() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
-  const [searchTerm, setSearchTerm] = useState(""); // Add search term state
+  const [searchTerm, setSearchTerm] = useState("");
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const channelRef = useRef(null);
   const updateIntervalRef = useRef(null);
+
+  // Define getOrCreateConversation only once
+  async function getOrCreateConversation(user1Id, user2Id) {
+    try {
+      // Check if conversation exists
+      const { data: existingConversations, error: fetchError } =
+        await supabase
+          .from("conversation_participants")
+          .select("conversation_id")
+          .in("user_id", [user1Id, user2Id])
+          .order("conversation_id");
+
+      if (fetchError) throw fetchError;
+
+      // Group by conversation_id and find one with both users
+      if (existingConversations.length > 0) {
+        const conversationCounts = existingConversations.reduce(
+          (acc, curr) => {
+            acc[curr.conversation_id] = (acc[curr.conversation_id] || 0) + 1;
+            return acc;
+          },
+          {}
+        );
+
+        for (const [convId, count] of Object.entries(conversationCounts)) {
+          if (count >= 2) return convId; // Found conversation with both users
+        }
+      }
+
+      // Create new conversation if not found
+      const { data: newConversation, error: createError } = await supabase
+        .from("conversations")
+        .insert({})
+        .select();
+
+      if (createError) throw createError;
+
+      // Add participants
+      const { error: participantsError } = await supabase
+        .from("conversation_participants")
+        .insert([
+          { conversation_id: newConversation[0].id, user_id: user1Id },
+          { conversation_id: newConversation[0].id, user_id: user2Id },
+        ]);
+
+      if (participantsError) throw participantsError;
+
+      return newConversation[0].id;
+    } catch (error) {
+      console.error("Error with conversation:", error);
+      return null;
+    }
+  }
 
   // Check auth state
   useEffect(() => {
@@ -67,12 +120,20 @@ function Chat() {
     // Polling function to fetch latest messages
     const pollMessages = async () => {
       try {
+        const conversationId = await getOrCreateConversation(
+          session.user.id,
+          selectedUser.id
+        );
+        
+        if (!conversationId) {
+          console.error("Failed to get or create conversation");
+          return;
+        }
+        
         const { data, error } = await supabase
           .from("messages")
           .select("*")
-          .or(
-            `and(sender_id.eq.${selectedUser.id},receiver_id.eq.${session.user.id}),and(sender_id.eq.${session.user.id},receiver_id.eq.${selectedUser.id})`
-          )
+          .eq("conversation_id", conversationId)
           .order("created_at", { ascending: true });
 
         if (error) throw error;
@@ -120,36 +181,45 @@ function Chat() {
           event: "INSERT",
           schema: "public",
           table: "messages",
-          filter: `or(and(sender_id.eq.${selectedUser.id},receiver_id.eq.${session.user.id}),and(sender_id.eq.${session.user.id},receiver_id.eq.${selectedUser.id}))`,
         },
-        (payload) => {
+        async (payload) => {
           const newMessage = payload.new;
-
-          // Prevent duplicate messages
-          setMessages((prevMessages) => {
-            const messageExists = prevMessages.some(
-              (msg) => msg.id === newMessage.id
+          
+          // Check if message belongs to current conversation
+          if (session && selectedUser) {
+            const conversationId = await getOrCreateConversation(
+              session.user.id,
+              selectedUser.id
             );
-            if (messageExists) return prevMessages;
+            
+            if (newMessage.conversation_id === conversationId) {
+              // Prevent duplicate messages
+              setMessages((prevMessages) => {
+                const messageExists = prevMessages.some(
+                  (msg) => msg.id === newMessage.id
+                );
+                if (messageExists) return prevMessages;
 
-            // Parse attachment if present
-            if (
-              newMessage.content &&
-              newMessage.content.includes("[ATTACHMENT]")
-            ) {
-              const parts = newMessage.content.split("[ATTACHMENT]");
-              newMessage.content = parts[0].trim();
-              newMessage.attachment_url = parts[1].trim();
-              newMessage.is_attachment = true;
+                // Parse attachment if present
+                if (
+                  newMessage.content &&
+                  newMessage.content.includes("[ATTACHMENT]")
+                ) {
+                  const parts = newMessage.content.split("[ATTACHMENT]");
+                  newMessage.content = parts[0].trim();
+                  newMessage.attachment_url = parts[1].trim();
+                  newMessage.is_attachment = true;
+                }
+
+                return [...prevMessages, newMessage];
+              });
             }
-
-            return [...prevMessages, newMessage];
-          });
+          }
         }
       )
       .subscribe();
 
-    // Cleanup function
+    // Return cleanup function
     return () => {
       if (updateIntervalRef.current) {
         clearInterval(updateIntervalRef.current);
@@ -178,21 +248,30 @@ function Chat() {
     };
   }, []);
 
-  // Fetch existing messages with real-time updates
+  // Fetch existing messages when selected user changes
   useEffect(() => {
     if (!session || !selectedUser) return;
 
     // Clear messages when changing selected user
     setMessages([]);
-
+    
     async function fetchMessages() {
       try {
+        const conversationId = await getOrCreateConversation(
+          session.user.id, 
+          selectedUser.id
+        );
+        
+        if (!conversationId) {
+          console.error("Failed to get conversation ID");
+          return;
+        }
+        
+        // Fetch messages for this conversation
         const { data, error } = await supabase
           .from("messages")
           .select("*")
-          .or(
-            `and(sender_id.eq.${session.user.id},receiver_id.eq.${selectedUser.id}),and(sender_id.eq.${selectedUser.id},receiver_id.eq.${session.user.id})`
-          )
+          .eq("conversation_id", conversationId)
           .order("created_at", { ascending: true });
 
         if (error) throw error;
@@ -213,7 +292,7 @@ function Chat() {
           }) || [];
 
         setMessages(messagesWithAttachments);
-        scrollToBottom();
+        // scrollToBottom();
       } catch (error) {
         console.error("Error fetching messages:", error);
       }
@@ -225,7 +304,7 @@ function Chat() {
   // Scroll to bottom when messages change
   useEffect(() => {
     if (messages.length > 0) {
-      scrollToBottom();
+      // scrollToBottom();
     }
   }, [messages]);
 
@@ -252,7 +331,7 @@ function Chat() {
     }, 100);
   }
 
-  // Upload file to storage - FIXED VERSION
+  // Upload file to storage
   async function uploadFile(file) {
     // Add defensive check
     if (!file) {
@@ -413,7 +492,7 @@ function Chat() {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center p-2 bg-gray-800 rounded"
+            className="flex items-center p-2 bg-black rounded"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -436,7 +515,7 @@ function Chat() {
     }
   }
 
-  // Send a new message - FIXED VERSION
+  // Send a new message
   async function sendMessage(e) {
     e.preventDefault();
 
@@ -466,11 +545,22 @@ function Chat() {
         }
       }
 
+      // Get or create a conversation
+      const conversationId = await getOrCreateConversation(
+        session.user.id,
+        selectedUser.id
+      );
+      if (!conversationId) {
+        alert("Could not create conversation");
+        return;
+      }
+
       // Optimistically add message to UI
       const optimisticMessage = {
         id: `temp-${Date.now()}`,
         sender_id: session.user.id,
         receiver_id: selectedUser.id,
+        conversation_id: conversationId,
         content: messageContent,
         created_at: new Date().toISOString(),
         is_optimistic: true,
@@ -484,17 +574,18 @@ function Chat() {
       }
 
       setMessages((messages) => [...messages, optimisticMessage]);
-      scrollToBottom(); // Scroll to the bottom after adding a new message
+      // scrollToBottom(); // Scroll to the bottom after adding a new message
       setNewMessage("");
       setFilePreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
 
-      // Send message to database - without the attachment_url field
+      // Send message to database
       const { data, error } = await supabase
         .from("messages")
         .insert({
           sender_id: session.user.id,
           receiver_id: selectedUser.id,
+          conversation_id: conversationId,
           content: messageContent,
         })
         .select();
@@ -561,113 +652,9 @@ function Chat() {
     }
   }, []);
 
-  async function uploadImage(file) {
-    if (!file) {
-      console.error("No file provided");
-      return null;
-    }
-
-    console.log("Uploading file:", file.name);
-
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${Math.random()
-      .toString(36)
-      .substring(2, 15)}-${Date.now()}.${fileExt}`;
-    const filePath = `${session.user.id}/${fileName}`; // 👈 Matches Supabase policy
-
-    setUploading(true);
-
-    try {
-      console.log("File path:", filePath);
-
-      const { data, error } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(filePath, file, { cacheControl: "3600", upsert: false });
-
-      if (error) {
-        console.error("Upload failed:", error);
-        return null;
-      }
-
-      console.log("Upload successful:", data);
-
-      const { data: urlData, error: urlError } = supabase.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(filePath);
-
-      if (urlError) {
-        console.error("Error getting public URL:", urlError);
-        return null;
-      }
-
-      console.log("Public URL:", urlData);
-
-      return urlData.publicUrl;
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      return null;
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function handleSubmitBlog(e) {
-    e.preventDefault();
-
-    if (!newBlog.title || !newBlog.content) {
-      alert("Title and content are required");
-      return;
-    }
-
-    setCreating(true);
-
-    try {
-      let imageUrl = null;
-
-      if (imageInputRef.current && imageInputRef.current.files[0]) {
-        const file = imageInputRef.current.files[0];
-        imageUrl = await uploadImage(file);
-
-        if (!imageUrl) {
-          throw new Error("Image upload failed");
-        }
-      }
-
-      console.log("Creating blog entry with image URL:", imageUrl);
-
-      const { data, error } = await supabase
-        .from("blogs")
-        .insert({
-          title: newBlog.title,
-          summary: newBlog.summary,
-          content: newBlog.content,
-          image_url: imageUrl,
-          author_id: session.user.id,
-        })
-        .select();
-
-      if (error) {
-        throw error;
-      }
-
-      console.log("Blog created successfully:", data);
-      setBlogs([...blogs, ...data]);
-      setNewBlog({ title: "", summary: "", content: "" });
-      setImagePreview(null);
-      if (imageInputRef.current) {
-        imageInputRef.current.value = "";
-      }
-    } catch (error) {
-      console.error("Error creating blog:", error);
-      alert("Error creating blog");
-    } finally {
-      setCreating(false);
-    }
-  }
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-300">
+      <div className="flex items-center justify-center h-screen bg-black text-gray-300">
         Loading...
       </div>
     );
@@ -675,7 +662,7 @@ function Chat() {
 
   if (!session) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-900">
+      <div className="flex items-center justify-center h-screen bg-black">
         <div className="text-center text-gray-300">
           <h1 className="text-2xl font-bold mb-4">
             Please sign in to use the chat
@@ -692,9 +679,9 @@ function Chat() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-300">
+    <div className="flex h-screen bg-black text-gray-300">
       {/* Users sidebar */}
-      <div className="w-1/4 bg-gray-800 border-r border-gray-700 overflow-y-auto mt-18">
+      <div className="w-1/4 bg-black border-r border-gray-700 overflow-y-auto">
         <div className="p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold text-white">Contacts</h2>
           <div className="mt-2 text-sm">
@@ -714,7 +701,7 @@ function Chat() {
             placeholder="Search users..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-gray-700 bg-gray-700 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500 text-white"
+          className="w-full rounded-lg border border-gray-700 bg-gray-700 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-white text-white"
           />
         </div>
 
@@ -735,11 +722,11 @@ function Chat() {
                 <div
                   key={profile.id}
                   className={`p-4 cursor-pointer hover:bg-gray-700 flex items-center ${
-                    selectedUser?.id === profile.id ? "bg-gray-700" : ""
+                    selectedUser?.id === profile.id ? "bg-black" : ""
                   }`}
                   onClick={() => setSelectedUser(profile)}
                 >
-                  <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white mr-3">
+                  <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-white mr-3">
                     {profile.avatar_url ? (
                       <img
                         src={profile.avatar_url}
@@ -775,8 +762,8 @@ function Chat() {
         {selectedUser ? (
           <>
             {/* Chat header */}
-            <div className="bg-gray-800 p-4 border-b border-gray-700 flex items-center mt-18">
-              <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white mr-3">
+            <div className="bg-black p-4 border-b border-gray-700 flex items-center">
+              <div className="w-10 h-10 bg-black rounded-full flex items-center justify-center text-white mr-3">
                 {selectedUser.avatar_url ? (
                   <img
                     src={selectedUser.avatar_url}
@@ -804,7 +791,7 @@ function Chat() {
             </div>
 
             {/* Messages area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-900">
+            <div className="flex-1 overflow-y-auto p-4 bg-black">
               {messages.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-gray-500">
                   No messages yet. Start a conversation!
@@ -822,7 +809,7 @@ function Chat() {
                     <div
                       className={`max-w-xs md:max-w-md lg:max-w-lg rounded-lg px-4 py-2 ${
                         message.sender_id === session.user.id
-                          ? "bg-purple-600 text-white"
+                          ? "bg-blue-400 text-white"
                           : "bg-gray-800 text-gray-300"
                       } ${message.is_optimistic ? "opacity-70" : ""}`}
                     >
@@ -832,7 +819,7 @@ function Chat() {
                       <div
                         className={`text-xs mt-1 ${
                           message.sender_id === session.user.id
-                            ? "text-purple-200"
+                            ? "text-black"
                             : "text-gray-500"
                         }`}
                       >
@@ -846,9 +833,9 @@ function Chat() {
             </div>
 
             {/* Message input */}
-            <div className="bg-gray-800 p-4 border-t border-gray-700">
+            <div className="bg-black p-4 border-t border-gray-700">
               {filePreview && (
-                <div className="mb-2 p-2 bg-gray-700 rounded flex items-center justify-between">
+                <div className="mb-2 p-2 bg-black rounded flex items-center justify-between">
                   <div className="flex items-center">
                     {filePreview.type === "image" ? (
                       <img
@@ -905,7 +892,7 @@ function Chat() {
                   onChange={(e) => setNewMessage(e.target.value)}
                   placeholder="Type a message..."
                   disabled={uploading}
-                  className="flex-1 rounded-l-lg border border-gray-700 bg-gray-700 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500 text-white"
+                  className="flex-1 rounded-l-lg border border-gray-700 bg-gray-700 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-white text-white"
                 />
                 <button
                   type="button"
@@ -934,55 +921,89 @@ function Chat() {
                     ref={fileInputRef}
                     onChange={handleFileSelect}
                     className="hidden"
-                  />
-                </button>
-                <button
-                  type="submit"
-                  disabled={uploading || (!newMessage.trim() && !filePreview)}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-r-lg disabled:opacity-50"
-                >
-                  {uploading ? (
-                    <svg
-                      className="animate-spin h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                  ) : (
-                    "Send"
-                  )}
-                </button>
-              </form>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-500">
-              Select a user to start chatting
-            </div>
-            {/* Footer */}
-            <footer className="bg-gray-800 text-gray-400 text-center py-2">
-              © 2023 CollabEdit. All rights reserved.
-            </footer>
-          </>
-        )}
-      </div>
+                  /><input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+              </button>
+              <button
+                type="submit"
+                disabled={(!newMessage.trim() && !filePreview) || uploading}
+                className={`rounded-r-lg px-4 py-2 ${
+                  uploading || (!newMessage.trim() && !filePreview)
+                    ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                    : "bg-purple-600 hover:bg-purple-700 text-white"
+                }`}
+              >
+                {uploading ? (
+                  <svg
+                    className="animate-spin h-5 w-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z"
+                      clipRule="evenodd"
+                      transform="rotate(180 10 10)"
+                    />
+                  </svg>
+                )}
+              </button>
+            </form>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="text-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-12 w-12 mx-auto text-gray-400 mb-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+              />
+            </svg>
+            <p className="text-xl font-medium">Select a contact to start chatting</p>
+            <p className="mt-2 max-w-md text-sm">
+              Choose from your contacts list on the left to begin a conversation
+            </p>
+          </div>
+        </div>
+      )}
     </div>
-  );
+  </div>
+);
 }
 
 export default Chat;
