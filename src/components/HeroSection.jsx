@@ -56,18 +56,18 @@ const HeroSection = () => {
 
   // Part 1: Main Hero Section Component
   return (
-    <div className="">
-      <div className="relative min-h-screen bg-black text-white overflow-hidden">
+    <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_40%,_#000000_80%)]">
+      <div className="relative min-h-screen bg-opacity-50 text-white overflow-hidden">
         {/* Main Hero Section */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-24 m-12">
           <div className="text-center py-20">
-            <h1 className="text-6xl sm:text-6xl font-bold mb-8 leading-tight">
+            <h1 className="text-6xl sm:text-6xl font-bold mb-8 leading-tight tracking-tighter">
               Simplify your
               <br />
               work with moongdal
             </h1>
             <div className="max-w-4xl mx-auto">
-              <p className="text-2xl sm:text-2xl mb-6 hover:text-zinc-400">
+              <p className="text-2xl sm:text-2xl mb-6 hover:text-zinc-300 hover:underline decoration-4 decoration-zinc-600 ">
                 Open source platform that lets you hand off tasks to real
                 experts,
                 <br />
@@ -79,7 +79,7 @@ const HeroSection = () => {
                 <input
                   type="text"
                   placeholder="Type anything..."
-                  className="bg-transparent text-white w-full outline-none"
+                  className="bg-transparent text-white w-full outline-none select-none"
                 />
                 <a href="/chat">
                 <button className="text-gray-400 cursor-pointer">→</button>
@@ -90,24 +90,24 @@ const HeroSection = () => {
         </div>
 
         {/* Use Cases Section */}
-        <div className="bg-black text-white pb-20">
+        <div className="bg-trasparent text-white pb-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
               <div className="col-span-1">
                 <div className="mb-6">
-                  <button className="bg-zinc-900 hover:bg-zinc-800 text-white px-6 py-3 rounded-full font-medium transition-colors">
+                  <button className="bg-gradient-to-bl from-green-900 to-blue-900 hover:bg-zinc-300 text-white px-6 py-3 rounded-full font-medium transition-colors border border-zinc-800 hover:border-gray-700">
                     Use cases
                   </button>
                 </div>
-                <h2 className="text-3xl font-bold mb-8 rounded-2xl">Use Platform for</h2>
+                <h2 className="text-3xl font-bold mb-8 rounded-2xl hover:text-zinc-300">Use Platform for ,</h2>
                 <div className="space-y-6">
                   {Object.keys(useCases).map((key) => (
                     <div
                       key={key}
-                      className={`p-4 rounded-lg cursor-pointer ${
+                      className={`p-4 rounded-4xl cursor-pointer ${
                         selectedSection === key
-                          ? "bg-zinc-900"
-                          : "hover:bg-zinc-900"
+                          ? "bg-black"
+                          : "hover:border border-emerald-900"
                       }`}
                       onClick={() => setSelectedSection(key)}
                     >
@@ -122,17 +122,17 @@ const HeroSection = () => {
                 </div>
               </div>
 
-              <div className="col-span-1 md:col-span-2 bg-zinc-900 rounded-4xl p-6">
+              <div className="col-span-1 md:col-span-2 bg-black rounded-4xl p-6">
                 {selectedSection === "chat" && (
                   <div>
                     <div className="mb-6">
                       <div className="flex items-center mb-3">
-                        <span className="bg-zinc-800 p-2 rounded-full mr-3">
+                        <span className="bg-zinc-900 p-2 rounded-full mr-3">
                           💬
                         </span>
                         <h3 className="text-xl font-bold">Realtime chatApp</h3>
                       </div>
-                      <div className="bg-zinc-800 rounded-lg p-3 text-sm">
+                      <div className="bg-zinc-900 rounded-lg p-3 text-sm">
                         Find the latest talents with our open source
                         collaboration platforms
                       </div>
@@ -145,9 +145,9 @@ const HeroSection = () => {
                             (source, index) => (
                               <div
                                 key={index}
-                                className="bg-zinc-800 p-3 rounded-lg"
+                                className="bg-zinc-900 p-3 rounded-lg"
                               >
-                                <p className="text-sm font-bold">
+                                <p className="text-sm font-medium">
                                   {source.name}
                                 </p>
                                 <p className="text-xs text-gray-400">
@@ -166,17 +166,17 @@ const HeroSection = () => {
                   <div>
                     <div className="mb-6">
                       <div className="flex items-center mb-3">
-                        <span className="bg-zinc-800 p-2 rounded-full mr-3">
+                        <span className="bg-zinc-900 p-2 rounded-full mr-3">
                           📰
                         </span>
-                        <h3 className="text-xl font-bold">
-                          Newsletter Generator
+                        <h3 className="text-xl font-medium">
+                          Blogs
                         </h3>
                       </div>
-                      <div className="bg-zinc-800 rounded-lg p-3 text-sm">
+                      <div className="bg-zinc-900 rounded-lg p-3 text-sm">
                         Craeate a blog about open projects
                       </div>
-                      <div className="mt-4 bg-zinc-800 p-4 rounded-lg">
+                      <div className="mt-4 bg-zinc-900 p-4 rounded-lg">
                         <h4 className="font-bold mb-2">Preview</h4>
                         <p className="text-sm">
                           {useCases.blogs.examples[0].preview}
@@ -190,17 +190,17 @@ const HeroSection = () => {
                   <div>
                     <div className="mb-6">
                       <div className="flex items-center mb-3">
-                        <span className="bg-zinc-800 p-2 rounded-full mr-3">
+                        <span className="bg-zinc-900 p-2 rounded-full mr-3">
                           📨
                         </span>
-                        <h3 className="text-xl font-bold">Email Summary</h3>
+                        <h3 className="text-xl font-medium">Email Summary</h3>
                       </div>
-                      <div className="bg-zinc-800 rounded-lg p-3 text-sm">
+                      <div className="bg-zinc-900 rounded-lg p-3 text-sm">
                         Find experts to work on your projects and level up your
                         work
                       </div>
-                      <div className="mt-4 bg-zinc-800 p-4 rounded-lg">
-                        <h4 className="font-bold mb-2">Result</h4>
+                      <div className="mt-4 bg-zinc-900 p-4 rounded-lg">
+                        <h4 className="font-bold mb-2">Best Results</h4>
                         <p className="text-sm">
                           {useCases.workflows.examples[0].summary}
                         </p>
@@ -213,7 +213,7 @@ const HeroSection = () => {
           </div>
         </div>
 
-        <div className="bg-black text-white py-20 border-t border-zinc-900">
+        {/* <div className="bg-transparent text-white py-20 border-t border-zinc-900">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <div className="text-center mb-16">
               <h2 className="text-5xl font-bold mb-4">Feature rich</h2>
@@ -221,58 +221,13 @@ const HeroSection = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Feature Card 1 */}
-              {/* <div className="bg-black rounded-lg p-5 border border-zinc-900">
-              <div className="flex items-center mb-4">
-                <span className="text-2xl mr-2">📂</span>
-                <h3 className="text-xl font-bold">
-                  Transparent and Customizable
-                </h3>
-              </div>
-              <div className="text-gray-300">
-                <p className="font-bold">Transparent and Customizable</p>
-                <p>
-                  Our app is open source, allowing you to inspect, modify, and
-                  enhance the code to fit your specific needs.
-                </p>
-              </div>
-            </div> */}
-
-              {/* Feature Card 2
-            <div className="bg-black rounded-lg p-6 border border-zinc-900">
-              <div className="flex items-center mb-4">
-                <span className="text-2xl mr-2">👍</span>
-                <h3 className="text-xl font-bold">Real-Time Chat</h3>
-              </div>
-              <div className="text-gray-300">
-                <p className="font-bold">Instant Communication</p>
-                <p>
-                  Enjoy seamless real-time messaging with friends, family, or
-                  colleagues, ensuring you stay connected at all times.
-                </p>
-              </div>
-            </div> */}
-
-              {/* Feature Card 3 */}
-              {/* <div className="bg-black rounded-lg p-6 border border-zinc-900">
-              <div className="flex items-center mb-4">
-                <span className="text-2xl mr-2">📊</span>
-                <h3 className="text-xl font-bold">Secure and Private</h3>
-              </div>
-              <div className="text-gray-300">
-                <p className="font-bold">Your Data, Your Control</p>
-                <p>
-                  We prioritize your privacy with robust security measures,
-                  ensuring your conversations and data remain safe and private.
-                </p>
-              </div>
-            </div> */}
+             
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Open Source Section */}
-        <div className="bg-black text-white py-20 border-t border-zinc-900">
+        <div className="bg-transparent backdrop-blur-lg text-white py-20 border-t border-zinc-900">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <div className="text-center mb-12">
               <h2 className="text-5xl font-bold mb-4">Proudly Open Source</h2>

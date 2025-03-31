@@ -17,7 +17,7 @@ function Chat() {
   const [uploading, setUploading] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [darkMode, setDarkMode] = useState(true);
+  // Removed darkMode state
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -91,7 +91,6 @@ function Chat() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load profiles once authenticated
   useEffect(() => {
     if (session) {
       fetchProfiles();
@@ -130,29 +129,25 @@ function Chat() {
   }
 
   // Simple login function for testing
-  async function handleLogin() {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: "test@example.com",
-        password: "password123",
-      });
+  // async function handleLogin() {
+  //   try {
+  //     const { data, error } = await supabase.auth.signInWithPassword({
+  //       email: "test@example.com", // Replace with your test email or use a proper auth form
+  //       password: "password123", // Replace with your test password
+  //     });
 
-      if (error) throw error;
-    } catch (error) {
-      console.error("Login error:", error);
-      alert("Error logging in");
-    }
-  }
+  //     if (error) throw error;
+  //   } catch (error) {
+  //     console.error("Login error:", error);
+  //     alert("Error logging in");
+  //   }
+  // }
 
-  // Part 2: Message Management, Real-time Updates, and File Handling
-  // Establish real-time connection with frequent polling
   const setupRealTimeUpdates = useCallback(() => {
-    // Clear any existing interval
     if (updateIntervalRef.current) {
       clearInterval(updateIntervalRef.current);
     }
 
-    // Disconnect any existing channel
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
     }
@@ -204,9 +199,16 @@ function Chat() {
           const newMessages = processedMessages.filter(
             (message) => !existingMessageIds.has(message.id)
           );
-          return newMessages.length > 0
-            ? [...prevMessages, ...newMessages]
-            : prevMessages;
+          // Only update if there are actually new messages fetched by polling
+          if (newMessages.length > 0) {
+            const combined = [...prevMessages, ...newMessages];
+            // Re-sort just in case polling fetches something out of order
+            combined.sort(
+              (a, b) => new Date(a.created_at) - new Date(b.created_at)
+            );
+            return combined;
+          }
+          return prevMessages;
         });
       } catch (error) {
         console.error("Error polling messages:", error);
@@ -219,7 +221,7 @@ function Chat() {
     // Set up interval for continuous polling (every second)
     updateIntervalRef.current = setInterval(pollMessages, 1000);
 
-    // Real-time listener as a backup
+    // Real-time listener as a backup/complementary mechanism
     channel
       .on(
         "postgres_changes",
@@ -239,25 +241,25 @@ function Chat() {
             );
 
             if (newMessage.conversation_id === conversationId) {
-              // Prevent duplicate messages
+              // Prevent duplicate messages potentially added by polling
               setMessages((prevMessages) => {
                 const messageExists = prevMessages.some(
                   (msg) => msg.id === newMessage.id
                 );
                 if (messageExists) return prevMessages;
 
-                // Parse attachment if present
+                const parsedMessage = { ...newMessage };
                 if (
-                  newMessage.content &&
-                  newMessage.content.includes("[ATTACHMENT]")
+                  parsedMessage.content &&
+                  parsedMessage.content.includes("[ATTACHMENT]")
                 ) {
-                  const parts = newMessage.content.split("[ATTACHMENT]");
-                  newMessage.content = parts[0].trim();
-                  newMessage.attachment_url = parts[1].trim();
-                  newMessage.is_attachment = true;
+                  const parts = parsedMessage.content.split("[ATTACHMENT]");
+                  parsedMessage.content = parts[0].trim();
+                  parsedMessage.attachment_url = parts[1].trim();
+                  parsedMessage.is_attachment = true;
                 }
 
-                return [...prevMessages, newMessage];
+                return [...prevMessages, parsedMessage];
               });
             }
           }
@@ -338,19 +340,19 @@ function Chat() {
           }) || [];
 
         setMessages(messagesWithAttachments);
-        // scrollToBottom();
+        scrollToBottom(); // Scroll after initial fetch
       } catch (error) {
         console.error("Error fetching messages:", error);
       }
     }
 
     fetchMessages();
-  }, [session, selectedUser]);
+  }, [session, selectedUser]); // Removed
 
   // Scroll to bottom when messages change
   useEffect(() => {
     if (messages.length > 0) {
-      // scrollToBottom();
+      scrollToBottom();
     }
   }, [messages]);
 
@@ -387,7 +389,7 @@ function Chat() {
         .from(BUCKET_NAME)
         .upload(filePath, file, {
           metadata: {
-            user_id: session.user.id, // Add user_id as metadata
+            user_id: session.user.id,
           },
         });
 
@@ -406,12 +408,9 @@ function Chat() {
       return null;
     } finally {
       setUploading(false);
-      setFilePreview(null);
     }
   }
 
-  // Part 3: UI Components, Message Rendering and Event Handlers
-  // Handle file selection
   function handleFileSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -423,6 +422,10 @@ function Chat() {
           (1024 * 1024)
         ).toFixed(2)}MB.`
       );
+      // Clear the input if file is too large
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       return;
     }
 
@@ -446,11 +449,11 @@ function Chat() {
     if (file.type.startsWith("image/")) {
       reader.readAsDataURL(file);
     } else {
-      reader.readAsText(file);
+      setFilePreview({ type: "file", name: file.name });
     }
   }
 
-  // Cancel file upload
+  // Cancel file upload/preview
   function cancelFileUpload() {
     setFilePreview(null);
     if (fileInputRef.current) {
@@ -462,33 +465,35 @@ function Chat() {
   function processContent(content) {
     if (!content) return "";
 
-    // URL regex pattern
-    const urlPattern = /(https?:\/\/[^\s]+)/g;
+    const urlPattern = /(https?:\/\/[^\s<>"'`]+)/g;
 
-    // Split the content by URL matches
     const parts = content.split(urlPattern);
 
-    // Find all URLs in the content
-    const urls = content.match(urlPattern) || [];
-
-    // Merge parts and URLs
     const result = [];
-    parts.forEach((part, index) => {
-      result.push(part);
-      if (urls[index]) {
-        result.push(
-          <a
-            key={index}
-            href={urls[index]}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:underline"
-          >
-            {urls[index]}
-          </a>
-        );
+    let urlIndex = 0;
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 0) {
+        // It's a text part
+        if (parts[i]) {
+          result.push(parts[i]);
+        }
+      } else {
+        const url = parts[i];
+        if (url) {
+          result.push(
+            <a
+              key={`url-${urlIndex++}`}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:underline break-all"
+            >
+              {url}
+            </a>
+          );
+        }
       }
-    });
+    }
 
     return result;
   }
@@ -497,30 +502,33 @@ function Chat() {
   function renderAttachment(url) {
     if (!url) return null;
 
-    if (url.match(/\.(jpeg|jpg|gif|png)$/i)) {
+    // Robust check for image file extensions
+    if (/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i.test(url)) {
       return (
         <div className="mt-2 max-w-xs overflow-hidden rounded-lg">
           <img
             src={url}
             alt="Attachment"
-            className="max-w-full h-auto"
+            className="max-w-full h-auto block"
             onClick={() => window.open(url, "_blank")}
             style={{ cursor: "pointer" }}
           />
         </div>
       );
     } else {
+      const filename = url.substring(url.lastIndexOf("/") + 1);
       return (
         <div className="mt-2">
           <a
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center p-2 bg-gray-800 rounded-lg transition-colors duration-150 hover:bg-gray-700"
+            className="flex items-center p-2 bg-gray-700 rounded-lg transition-colors duration-150 hover:bg-gray-600"
+            download // Suggest downloading
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 mr-2 text-gray-400"
+              className="h-5 w-5 mr-2 text-gray-400 flex-shrink-0"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -532,7 +540,12 @@ function Chat() {
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            <span className="text-blue-400 hover:underline">Download File</span>
+            <span
+              className="text-blue-400 hover:underline truncate"
+              title={filename}
+            >
+              {filename || "Download File"}
+            </span>
           </a>
         </div>
       );
@@ -545,65 +558,62 @@ function Chat() {
 
     if ((!newMessage.trim() && !filePreview) || !selectedUser) return;
 
-    try {
-      let attachmentUrl = null;
-      let messageContent = newMessage.trim();
+    let attachmentUrl = null;
+    let messageContent = newMessage.trim();
+    const fileToSend = fileInputRef.current?.files[0];
 
-      // Handle file upload if there's a preview
-      if (
-        filePreview &&
-        fileInputRef.current &&
-        fileInputRef.current.files[0]
-      ) {
-        const file = fileInputRef.current.files[0];
-        attachmentUrl = await uploadFile(file);
+    if (filePreview && fileToSend) {
+      attachmentUrl = await uploadFile(fileToSend);
 
-        // If upload failed and no text message, don't proceed
-        if (!attachmentUrl && !messageContent) return;
-
-        // If we have an attachment, embed it in the message content
-        if (attachmentUrl) {
-          messageContent = `${
-            messageContent || ""
-          } [ATTACHMENT]${attachmentUrl}`;
-        }
+      if (!attachmentUrl && !messageContent) {
+        setUploading(false);
+        return;
       }
 
+      if (attachmentUrl) {
+        messageContent = `${messageContent || ""} [ATTACHMENT]${attachmentUrl}`;
+      }
+    }
+
+    if (!messageContent.trim()) {
+      console.warn(
+        "Attempted to send an empty message after failed upload or no content."
+      );
+      setUploading(false);
+      return;
+    }
+
+    try {
       // Get or create a conversation
       const conversationId = await getOrCreateConversation(
         session.user.id,
         selectedUser.id
       );
       if (!conversationId) {
-        alert("Could not create conversation");
+        alert("Could not establish conversation");
         return;
       }
 
-      // Optimistically add message to UI
+      // UI Updates First 
       const optimisticMessage = {
-        id: `temp-${Date.now()}`,
+        id: `temp-${Date.now()}-${Math.random()}`,
         sender_id: session.user.id,
         receiver_id: selectedUser.id,
         conversation_id: conversationId,
-        content: messageContent,
+        content: newMessage.trim(),
+        attachment_url: attachmentUrl,
+        is_attachment: !!attachmentUrl,
         created_at: new Date().toISOString(),
         is_optimistic: true,
       };
 
-      // Extract attachment URL for UI display
-      if (attachmentUrl) {
-        optimisticMessage.content = newMessage.trim();
-        optimisticMessage.attachment_url = attachmentUrl;
-        optimisticMessage.is_attachment = true;
-      }
-
-      setMessages((messages) => [...messages, optimisticMessage]);
-      // scrollToBottom();
+      setMessages((prevMessages) => [...prevMessages, optimisticMessage]);
+      scrollToBottom();
       setNewMessage("");
       setFilePreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
 
-      // Send message to database
+      // Database 
       const { data, error } = await supabase
         .from("messages")
         .insert({
@@ -612,13 +622,13 @@ function Chat() {
           conversation_id: conversationId,
           content: messageContent,
         })
-        .select();
+        .select()
+        .single();
 
       if (error) throw error;
 
-      // Parse the returned message to extract attachment
-      if (data && data[0]) {
-        const returnedMsg = { ...data[0] };
+      if (data) {
+        const returnedMsg = { ...data };
         if (
           returnedMsg.content &&
           returnedMsg.content.includes("[ATTACHMENT]")
@@ -627,43 +637,45 @@ function Chat() {
           returnedMsg.content = parts[0].trim();
           returnedMsg.attachment_url = parts[1].trim();
           returnedMsg.is_attachment = true;
+        } else {
+          returnedMsg.is_attachment = false;
+          returnedMsg.attachment_url = null;
         }
 
-        // Replace optimistic message with real one
-        setMessages((messages) =>
-          messages.map((msg) =>
-            msg.id === optimisticMessage.id ? returnedMsg : msg
+        setMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg.id === optimisticMessage.id
+              ? { ...returnedMsg, is_optimistic: false }
+              : msg
           )
+        );
+      } else {
+        console.warn("Message sent but no data returned from Supabase.");
+        setMessages((prevMessages) =>
+          prevMessages.filter((msg) => msg.id !== optimisticMessage.id)
         );
       }
     } catch (error) {
       console.error("Error sending message:", error);
-      // Remove optimistic message on error
-      setMessages((messages) => messages.filter((msg) => !msg.is_optimistic));
-      alert("Error sending message");
+      setMessages((prevMessages) =>
+        prevMessages.filter((msg) => !msg.is_optimistic)
+      );
+      alert("Error sending message. Please try again.");
+    } finally {
+      setUploading(false); 
     }
   }
 
-  // Toggle dark/light mode
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-  };
-
-  const themeClass = "bg-black text-gray-100"; // Black background with light text
-
-  const sidebarClass = "bg-black border-gray-700"; // Sidebar with black background
-
-  const messageInputClass = "bg-black border-gray-600 focus:ring-white-500"; // Message input with dark gray background
-
-  const buttonClass = "bg-green-600 hover:bg-indigo-700"; // Buttons with indigo color
-
-  const myMessageClass = "bg-gray-800 text-white"; // Messages sent by the user
-
-  const otherMessageClass = "bg-zinc-900 text-gray-100"; // Messages received from others
+  const sidebarClass = "bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_100%,_#000000_100%)]border-r border-gray-700";
+  const messageInputClass =
+    "bg-gray-900 border-gray-600 focus:ring-indigo-500 text-gray-100 placeholder-gray-500"; 
+  const buttonClass = "bg-indigo-600 hover:bg-indigo-700";
+  const myMessageClass = "bg-indigo-700 text-white";
+  const otherMessageClass = "bg-gray-800 text-gray-100";
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-r from-indigo-900 to-purple-900 text-white">
+      <div className="flex items-center justify-center h-screen bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_40%,_#000000_80%)] text-white">
         <div className="flex flex-col items-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mb-4"></div>
           <p className="text-xl font-medium">Loading chat...</p>
@@ -674,8 +686,9 @@ function Chat() {
 
   if (!session) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-r from-indigo-900 to-purple-900">
-        <div className="bg-gray-800 p-8 rounded-xl shadow-2xl text-center text-white max-w-md w-full">
+      <div className="flex items-center justify-center h-screen bg-[radial-gradient(ellipse_at_center,_#0f172a_40%,_#042f2e_100%,_#000000_100%)]">
+        <div className="bg-gray-800/70 backdrop-blur-sm p-8 rounded-xl shadow-2xl text-center text-white max-w-md w-full border border-gray-700">
+          {" "}
           <h1 className="text-3xl font-bold mb-6">Welcome to ChatterHub</h1>
           <p className="mb-8 text-gray-300">Please sign in to continue</p>
           <button
@@ -690,24 +703,24 @@ function Chat() {
   }
 
   return (
-    <div
-      className={`flex h-screen ${themeClass} transition-colors duration-200 mt-18`}
-    >
+    <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_100%,_#000000_100%)]">
+    <div className="flex h-screen text-gray-100 bg-transparent backdrop-blur-3xl ">
       {/* Users sidebar */}
-      <div
-        className={`w-1/4 ${sidebarClass} border-r overflow-y-auto transition-colors duration-200`}
-      >
-        <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+      <div className={`w-1/4 ${sidebarClass} overflow-y-auto flex flex-col mt-18`}>
+        <div className="p-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0">
           <div>
-            <h2 className="text-xl font-bold">loged in as</h2>
-            <div className="mt-1 text-sm opacity-75">
+            <h2 className="text-lg font-semibold">Logged in as:</h2>
+            <div
+              className="mt-1 text-sm opacity-75 truncate"
+              title={session.user.email}
+            >
               <p>{session.user.email}</p>
             </div>
           </div>
-          <div className="flex items-center space-x-3">
-        
+          <div className="flex items-center space-x-2">
             <button
               onClick={() => supabase.auth.signOut()}
+              title="Sign Out"
               className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-gray-700 transition-colors"
             >
               <svg
@@ -728,7 +741,7 @@ function Chat() {
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="p-4 flex-shrink-0">
           <div className="relative">
             <input
               type="text"
@@ -737,7 +750,7 @@ function Chat() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className={`w-full rounded-lg ${messageInputClass} py-2 pl-10 pr-4 focus:outline-none focus:ring-2 transition-colors duration-200`}
             />
-            <div className="absolute left-3 top-2.5">
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-5 w-5 text-gray-400"
@@ -756,12 +769,12 @@ function Chat() {
           </div>
         </div>
 
-        <div>
+        <div className="flex-grow overflow-y-auto">
           {profiles.length === 0 ? (
-            <div className="p-4 text-gray-500 text-center">
+            <div className="p-4 text-gray-500 text-center mt-10">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-12 w-12 mx-auto text-gray-400 mb-2"
+                className="h-12 w-12 mx-auto text-gray-600 mb-2"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -776,10 +789,10 @@ function Chat() {
               No contacts found
             </div>
           ) : (
-            <div className="space-y-1 px-2">
+            <div className="space-y-1 px-2 pb-2">
               {profiles
                 .filter((profile) =>
-                  profile.username
+                  (profile.username || profile.full_name || "")
                     ?.toLowerCase()
                     .includes(searchTerm.toLowerCase())
                 )
@@ -788,53 +801,44 @@ function Chat() {
                     key={profile.id}
                     className={`p-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center ${
                       selectedUser?.id === profile.id
-                        ? darkMode
-                          ? "bg-gray-900"
-                          : "bg-indigo-50"
-                        : "hover:bg-opacity-10 hover:bg-gray-500"
+                        ? "bg-gray-700"
+                        : "hover:bg-gray-800"
                     }`}
                     onClick={() => setSelectedUser(profile)}
                   >
                     <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center text-white mr-3 ${
-                        darkMode
-                          ? "bg-gray-600"
-                          : "bg-indigo-100 text-indigo-500"
-                      }`}
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white mr-3 bg-gray-600 flex-shrink-0" // Fixed dark style, size adjusted, flex-shrink
                     >
                       {profile.avatar_url ? (
                         <img
                           src={profile.avatar_url}
-                          alt={profile.username}
-                          className="w-12 h-12 rounded-full object-cover"
+                          alt={profile.username || profile.full_name}
+                          className="w-full h-full rounded-full object-cover"
                         />
                       ) : (
                         <span className="text-lg font-medium">
-                          {(profile.username || profile.full_name || "User")
+                          {(profile.username || profile.full_name || "U")
                             .charAt(0)
                             .toUpperCase()}
                         </span>
                       )}
                     </div>
-                    <div>
-                      <div className="font-medium">
+                    <div className="flex-grow min-w-0">
+                      <div className="font-medium truncate">
                         {profile.username ||
                           profile.full_name ||
                           "Anonymous User"}
                       </div>
-                      {profile.username && profile.full_name && (
-                        <div className="text-sm opacity-75">
-                          {profile.full_name}
-                        </div>
-                      )}
+                      {profile.full_name &&
+                        profile.username !== profile.full_name && (
+                          <div className="text-sm opacity-75 truncate">
+                            {profile.full_name}
+                          </div>
+                        )}
                     </div>
                     {selectedUser?.id === profile.id && (
-                      <div className="ml-auto">
-                        <div
-                          className={`w-3 h-3 rounded-full ${
-                            darkMode ? "bg-indigo-400" : "bg-indigo-500"
-                          }`}
-                        ></div>
+                      <div className="ml-auto pl-2 flex-shrink-0">
+                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-400"></div>
                       </div>
                     )}
                   </div>
@@ -845,62 +849,52 @@ function Chat() {
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col bg-gray-900/50">
         {selectedUser ? (
           <>
             {/* Chat header */}
-            <div
-              className={`${
-                darkMode ? "bg-gray-800" : "bg-white"
-              } p-4 border-b ${
-                darkMode ? "border-gray-700" : "border-gray-200"
-              } flex items-center transition-colors duration-200`}
-            >
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-white mr-3 ${
-                  darkMode ? "bg-gray-600" : "bg-indigo-100 text-indigo-500"
-                }`}
-              >
+            <div className="bg-gray-800 p-4 border-b border-gray-700 flex items-center transition-colors duration-200 flex-shrink-0">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white mr-3 bg-gray-600 flex-shrink-0">
                 {selectedUser.avatar_url ? (
                   <img
                     src={selectedUser.avatar_url}
-                    alt={selectedUser.username}
-                    className="w-10 h-10 rounded-full object-cover"
+                    alt={selectedUser.username || selectedUser.full_name}
+                    className="w-full h-full rounded-full object-cover"
                   />
                 ) : (
                   <span className="text-lg font-medium">
-                    {(selectedUser.username || selectedUser.full_name || "User")
+                    {(selectedUser.username || selectedUser.full_name || "U")
                       .charAt(0)
                       .toUpperCase()}
                   </span>
                 )}
               </div>
-              <div>
-                <div className="font-medium">
+              <div className="min-w-0">
+                <div className="font-medium truncate">
                   {selectedUser.username ||
                     selectedUser.full_name ||
                     "Anonymous User"}
                 </div>
-                {selectedUser.username && selectedUser.full_name && (
-                  <div className="text-sm opacity-75">
-                    {selectedUser.full_name}
-                  </div>
-                )}
+                {selectedUser.full_name &&
+                  selectedUser.username !== selectedUser.full_name && (
+                    <div className="text-sm opacity-75 truncate">
+                      {selectedUser.full_name}
+                    </div>
+                  )}
               </div>
             </div>
 
             {/* Messages area */}
-            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto">
+            <div
+              ref={chatContainerRef}
+              className="flex-1 p-4 overflow-y-auto space-y-4"
+            >
               {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center">
-                  <div
-                    className={`p-4 rounded-full ${
-                      darkMode ? "bg-gray-800" : "bg-gray-100"
-                    } mb-4`}
-                  >
+                <div className="h-full flex flex-col items-center justify-center text-center text-gray-400">
+                  <div className="p-4 rounded-full bg-gray-800 mb-4">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-10 w-10 text-gray-400"
+                      className="h-10 w-10"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -913,17 +907,21 @@ function Chat() {
                       />
                     </svg>
                   </div>
-                  <p className="text-lg font-medium">Start a conversation</p>
+                  <p className="text-lg font-medium text-gray-300">
+                    Start a conversation
+                  </p>
                   <p className="text-sm opacity-75 max-w-xs mt-2">
                     Send a message to begin chatting with{" "}
-                    {selectedUser.username || "this user"}
+                    {selectedUser.username ||
+                      selectedUser.full_name ||
+                      "this user"}
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {messages.map((message, index) => (
+                <>
+                  {messages.map((message) => (
                     <div
-                      key={message.id}
+                      key={message.id} // Use the message ID as key
                       className={`flex ${
                         message.sender_id === session.user.id
                           ? "justify-end"
@@ -931,51 +929,61 @@ function Chat() {
                       }`}
                     >
                       <div
-                        className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 rounded-lg ${
+                        className={`max-w-[70%] md:max-w-[60%] lg:max-w-[50%] px-4 py-2 rounded-xl shadow-md ${
+                          // Adjusted max-width, rounded-xl, shadow
                           message.sender_id === session.user.id
                             ? myMessageClass
                             : otherMessageClass
-                        } ${message.is_optimistic ? "opacity-50" : ""}`}
+                        } ${message.is_optimistic ? "opacity-60" : ""}`}
                       >
-                        <div className="whitespace-pre-wrap break-words">
-                          {processContent(message.content)}
-                        </div>
+                        {/* Render text content only if it exists */}
+                        {message.content && (
+                          <div className="whitespace-pre-wrap break-words">
+                            {processContent(message.content)}
+                          </div>
+                        )}
+                        {/* Render attachment if it exists */}
                         {message.is_attachment &&
                           renderAttachment(message.attachment_url)}
-                        <div className="text-xs opacity-75 text-right mt-1">
+                        <div
+                          className={`text-xs opacity-75 text-right mt-1 ${
+                            message.sender_id === session.user.id
+                              ? "text-indigo-200"
+                              : "text-gray-400"
+                          }`}
+                        >
+                          {" "}
+                          {/* Conditional timestamp color */}
                           {formatTime(message.created_at)}
+                          {/* Optionally show optimistic indicator */}
+                          {message.is_optimistic && (
+                            <span className="ml-1">(Sending...)</span>
+                          )}
                         </div>
                       </div>
                     </div>
                   ))}
-                  <div ref={messagesEndRef} />
-                </div>
+                  <div ref={messagesEndRef} className="h-1" />{" "}
+                  {/* Reference div */}
+                </>
               )}
             </div>
 
             {/* File preview */}
             {filePreview && (
-              <div
-                className={`p-2 ${
-                  darkMode ? "bg-gray-800" : "bg-gray-100"
-                } border-t ${darkMode ? "border-gray-700" : "border-gray-200"}`}
-              >
-                <div className="flex items-center">
-                  <div className="flex-1 flex items-center">
+              <div className="p-2 bg-gray-800 border-t border-gray-700 flex-shrink-0">
+                <div className="flex items-center bg-gray-700 rounded p-2">
+                  <div className="flex-1 flex items-center min-w-0">
                     {filePreview.type === "image" ? (
-                      <div className="w-12 h-12 mr-3">
+                      <div className="w-10 h-10 mr-3 flex-shrink-0">
                         <img
                           src={filePreview.url}
                           alt="Preview"
-                          className="w-12 h-12 object-cover rounded"
+                          className="w-full h-full object-cover rounded"
                         />
                       </div>
                     ) : (
-                      <div
-                        className={`w-12 h-12 rounded flex items-center justify-center mr-3 ${
-                          darkMode ? "bg-gray-700" : "bg-gray-200"
-                        }`}
-                      >
+                      <div className="w-10 h-10 rounded flex items-center justify-center mr-3 bg-gray-600 flex-shrink-0">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           className="h-6 w-6 text-gray-400"
@@ -992,20 +1000,29 @@ function Chat() {
                         </svg>
                       </div>
                     )}
-                    <div className="truncate">
-                      <div className="font-medium truncate">
+                    <div className="flex-grow truncate">
+                      <div className="font-medium truncate text-sm text-gray-200">
                         {filePreview.name}
                       </div>
                       {uploading && (
-                        <div className="w-full bg-gray-700 rounded-full h-1.5 mt-1">
-                          <div className="bg-indigo-500 h-1.5 rounded-full w-1/2 animate-pulse"></div>
+                        <div className="w-full bg-gray-600 rounded-full h-1 mt-1">
+                          <div
+                            className="bg-indigo-500 h-1 rounded-full"
+                            style={{
+                              width: "100%",
+                              animation:
+                                "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                            }}
+                          ></div>
                         </div>
                       )}
                     </div>
                   </div>
                   <button
                     onClick={cancelFileUpload}
-                    className="ml-2 p-1 rounded-full hover:bg-gray-700"
+                    disabled={uploading} // Disable cancel while uploading
+                    className="ml-2 p-1 rounded-full hover:bg-gray-600 disabled:opacity-50"
+                    title="Cancel upload"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -1028,17 +1045,16 @@ function Chat() {
 
             {/* Message input */}
             <div
-              className={`p-4 ${
-                darkMode ? "bg-gray-800" : "bg-white"
-              } border-t ${
-                darkMode ? "border-gray-700" : "border-gray-200"
-              } transition-colors duration-200`}
+              className="p-4 bg-gray-800 border-t border-gray-700 transition-colors duration-200 flex-shrink-0" // Fixed dark style, added flex-shrink
             >
-              <form onSubmit={sendMessage} className="flex items-center">
+              <form onSubmit={sendMessage} className="flex items-end space-x-2">
+                {" "}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-2 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 mr-2"
+                  disabled={uploading} // Disable while uploading
+                  className="p-2 rounded-full text-gray-400 hover:text-indigo-400 hover:bg-gray-700 disabled:opacity-50 flex-shrink-0" // Added flex-shrink
+                  title="Attach file"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -1060,42 +1076,61 @@ function Chat() {
                   ref={fileInputRef}
                   className="hidden"
                   onChange={handleFileSelect}
+                  disabled={uploading}
                 />
-                <input
-                  type="text"
+                <textarea
+                  rows={1} // Start with 1 row
                   placeholder="Type a message..."
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${e.target.scrollHeight}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    // Send on Enter, new line on Shift+Enter
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault(); 
+                      sendMessage(e); 
+                    }
+                  }}
                   disabled={uploading}
-                  className={`flex-1 rounded-lg ${messageInputClass} py-2 px-4 focus:outline-none focus:ring-2 transition-colors duration-200`}
+                  className={`flex-1 rounded-lg ${messageInputClass} py-2 px-4 focus:outline-none focus:ring-2 resize-none overflow-y-auto max-h-24`} // Added resize-none, overflow-y-auto, max-h
+                  style={{ height: "auto" }} 
                 />
                 <button
                   type="submit"
                   disabled={uploading || (!newMessage.trim() && !filePreview)}
-                  className={`ml-2 px-4 py-2 rounded-lg text-white ${buttonClass} disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200`}
+                  className={`px-4 py-2 rounded-lg text-white ${buttonClass} disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex-shrink-0 h-10`} // Fixed height, added flex-shrink
+                  title="Send message"
                 >
                   {uploading ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      <span>Sending...</span>
+                    <div className="flex items-center justify-center w-5 h-5">
+                      {" "}
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                     </div>
                   ) : (
-                    "Send"
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                    </svg> 
                   )}
                 </button>
               </form>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-gray-400">
             <div
-              className={`p-6 rounded-full ${
-                darkMode ? "bg-gray-800" : "bg-gray-100"
-              } mb-4`}
+              className="p-6 rounded-full bg-gray-800 mb-6" 
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-14 w-14 text-gray-400"
+                className="h-14 w-14" 
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -1103,20 +1138,24 @@ function Chat() {
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeWidth={2}
+                  strokeWidth={1.5} 
                   d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
                 />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold">Select a Conversation</h2>
-            <p className="text-gray-400 mt-2 text-center max-w-md px-4">
+            <h2 className="text-2xl font-semibold text-gray-300">
+              Select a Conversation
+            </h2>
+            <p className="mt-2 text-center max-w-sm">
+              {" "}
+              {/* Wider max-width */}
               Choose a contact from the sidebar to start chatting or continue a
               previous conversation.
             </p>
           </div>
         )}
       </div>
-    </div>
+    </div></div>
   );
 }
 

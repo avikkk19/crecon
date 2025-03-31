@@ -67,7 +67,7 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-black shadow-md py-4 px-4 sm:px-6 fixed top-0 left-0 right-0 z-50">
+    <nav className="bg-transparent shadow-xs backdrop-blur-3xl py-4 px-4 sm:px-6 fixed top-0 left-0 right-0 z-50">
       <div className="mx-auto flex justify-between items-center">
         {/* Logo - Fixed width to prevent shifting */}
         <div className="flex items-center w-1/4">

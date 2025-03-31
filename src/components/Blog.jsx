@@ -392,22 +392,23 @@ function Blog() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-gray-300 ">
+    <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_100%,_#000000_100%)]">
+    <div className="min-h-screen text-gray-300 ">
       {/* Header */}
-      <header className="bg-black shadow-md p-4 border-b border-gray-700 ">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
+      <header className="bg-trasnparent backdrop-blur-lg shadow-md p-4 border-b border-gray-700  ">
+        <div className="max-w-6xl mx-auto flex justify-between items-centern mt-20">
           <h1 className="text-2xl font-bold text-white">Community Blog</h1>
           <div className="flex items-center space-x-4">
             <p className="text-sm">Logged in as: {session.user.email}</p>
-            <button
+            {/* <button
               onClick={() => supabase.auth.signOut()}
               className="text-red-400 hover:text-red-300 text-sm"
             >
               Sign Out
-            </button>
+            </button> */}
             <a
               href="/chat"
-              className="text-white hover:text-zinc-300 text-sm"
+              className="text-white hover:text-zinc-300 text-sm bg-black rounded-4xl p-2"
             >
               Go to Chat
             </a>
@@ -416,7 +417,7 @@ function Blog() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-6xl mx-auto p-4">
+      <main className="max-w-6xl mx-auto p-4 ">
         {/* Create blog button */}
         {!creating && !selectedBlog && (
           <div className="mb-6 flex justify-end">
@@ -931,7 +932,7 @@ function Blog() {
           </div>
         )}
       </main>
-    </div>
+    </div></div>
   );
 }
 
