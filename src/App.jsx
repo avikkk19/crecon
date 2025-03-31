@@ -47,6 +47,16 @@ const App = () => {
           }
         />
 
+        {/* Add this new route with userId parameter */}
+        <Route
+          path="/chat/:userId"
+          element={
+            <ProtectedRoute>
+              <ModernChatInterface />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/blog"
           element={
