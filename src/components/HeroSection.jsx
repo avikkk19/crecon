@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
 
 const HeroSection = () => {
   const [selectedSection, setSelectedSection] = useState("chat");
@@ -59,7 +58,7 @@ const HeroSection = () => {
     <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_40%,_#000000_80%)]">
       <div className="relative min-h-screen bg-opacity-50 text-white overflow-hidden">
         {/* Main Hero Section */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-24 m-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-24 m-16">
           <div className="text-center py-20">
             <h1 className="text-6xl sm:text-6xl font-bold mb-8 leading-tight tracking-tighter">
               Simplify your
@@ -86,6 +85,7 @@ const HeroSection = () => {
                 </a>{" "}
               </div>
             </div>
+              <p className="justify-center align-center mt-12 text-sm font-mono">* Sign up for full access *</p>
           </div>
         </div>
 

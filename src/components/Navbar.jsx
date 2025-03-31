@@ -244,7 +244,7 @@ const Navbar = () => {
             </a>
 
             <a
-              href="/blogs"
+              href="/blog"
               className="block px-3 py-2 text-gray-300 hover:text-white"
             >
               Blogs
