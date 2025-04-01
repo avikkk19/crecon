@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./SupabaseClient.jsx";
+import { useParams, useLocation } from "react-router-dom";
 
 // Constants
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
@@ -7,6 +8,9 @@ const BUCKET_NAME = "chat-media";
 
 // Part 1: Core Chat Component and State Management
 function Chat() {
+  const params = useParams();
+  const userId = params.userId; // Extract userId from URL params
+  
   // State management
   const [session, setSession] = useState(null);
   const [profiles, setProfiles] = useState([]);
@@ -17,7 +21,6 @@ function Chat() {
   const [uploading, setUploading] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  // Removed darkMode state
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -25,6 +28,11 @@ function Chat() {
   const channelRef = useRef(null);
   const updateIntervalRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const blogId = queryParams.get("blogId");
+  console.log("URL userId parameter:", userId);
+  console.log("URL blogId parameter:", blogId)
 
   // Conversation management
   async function getOrCreateConversation(user1Id, user2Id) {
@@ -74,45 +82,83 @@ function Chat() {
       return null;
     }
   }
-
-  // Authentication and session management
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (session) {
-      fetchProfiles();
-    }
-  }, [session]);
-
-  // Fetch all user profiles except current user
-  async function fetchProfiles() {
+  // Add fetchUserById function
+  async function fetchUserById(id) {
     try {
       const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .neq("id", session.user.id);
-
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
       if (error) throw error;
-
-      setProfiles(data || []);
+      
+      if (data) {
+        setSelectedUser(data);
+        sessionStorage.setItem("selectedUser", JSON.stringify(data));
+      }
     } catch (error) {
-      console.error("Error fetching profiles:", error);
+      console.error('Error fetching user:', error);
     }
   }
+ // Authentication and session management
+ useEffect(() => {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    setSession(session);
+    setLoading(false);
+  });
 
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    setSession(session);
+  });
+
+  return () => subscription.unsubscribe();
+}, []);
+useEffect(() => {
+  if (userId) {
+    console.log("Trying to load chat with user ID:", userId);
+
+    const selectedUserData = JSON.parse(
+      sessionStorage.getItem("selectedUser")
+    );
+    console.log("Selected user data from sessionStorage:", selectedUserData);
+
+    if (selectedUserData && selectedUserData.id === userId) {
+      setSelectedUser(selectedUserData);
+
+      if (blogId) {
+        console.log("Loading blog ID:", blogId);
+      }
+    } else {
+      fetchUserById(userId);
+    }
+  }
+}, [userId, blogId]);
+
+useEffect(() => {
+  if (session) {
+    fetchProfiles();
+  }
+}, [session]);
+
+
+
+ // Add the fetchProfiles function that's referenced but not defined
+ async function fetchProfiles() {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*');
+      
+    if (error) throw error;
+    
+    setProfiles(data || []);
+  } catch (error) {
+    console.error('Error fetching profiles:', error);
+  }
+}
   // Scroll to the bottom of the messages
   function scrollToBottom() {
     setTimeout(() => {
@@ -193,16 +239,13 @@ function Chat() {
           return message;
         });
 
-        // Update messages state, avoiding duplicates
         setMessages((prevMessages) => {
           const existingMessageIds = new Set(prevMessages.map((m) => m.id));
           const newMessages = processedMessages.filter(
             (message) => !existingMessageIds.has(message.id)
           );
-          // Only update if there are actually new messages fetched by polling
           if (newMessages.length > 0) {
             const combined = [...prevMessages, ...newMessages];
-            // Re-sort just in case polling fetches something out of order
             combined.sort(
               (a, b) => new Date(a.created_at) - new Date(b.created_at)
             );
@@ -221,7 +264,6 @@ function Chat() {
     // Set up interval for continuous polling (every second)
     updateIntervalRef.current = setInterval(pollMessages, 1000);
 
-    // Real-time listener as a backup/complementary mechanism
     channel
       .on(
         "postgres_changes",
@@ -594,7 +636,7 @@ function Chat() {
         return;
       }
 
-      // UI Updates First 
+      // UI Updates First
       const optimisticMessage = {
         id: `temp-${Date.now()}-${Math.random()}`,
         sender_id: session.user.id,
@@ -613,7 +655,7 @@ function Chat() {
       setFilePreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
 
-      // Database 
+      // Database
       const { data, error } = await supabase
         .from("messages")
         .insert({
@@ -662,13 +704,14 @@ function Chat() {
       );
       alert("Error sending message. Please try again.");
     } finally {
-      setUploading(false); 
+      setUploading(false);
     }
   }
 
-  const sidebarClass = "bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_100%,_#000000_100%)]border-r border-gray-700";
+  const sidebarClass =
+    "bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_100%,_#000000_100%)]border-r border-gray-700";
   const messageInputClass =
-    "bg-gray-900 border-gray-600 focus:ring-indigo-500 text-gray-100 placeholder-gray-500"; 
+    "bg-gray-900 border-gray-600 focus:ring-indigo-500 text-gray-100 placeholder-gray-500";
   const buttonClass = "bg-indigo-600 hover:bg-indigo-700";
   const myMessageClass = "bg-indigo-700 text-white";
   const otherMessageClass = "bg-gray-800 text-gray-100";
@@ -703,459 +746,462 @@ function Chat() {
   }
 
   return (
-    <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_100%,_#000000_100%)]">
-    <div className="flex h-screen text-gray-100 bg-transparent backdrop-blur-3xl ">
-      {/* Users sidebar */}
-      <div className={`w-1/4 ${sidebarClass} overflow-y-auto flex flex-col mt-18`}>
-        <div className="p-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0">
-          <div>
-            <h2 className="text-lg font-semibold">Logged in as:</h2>
-            <div
-              className="mt-1 text-sm opacity-75 truncate"
-              title={session.user.email}
-            >
-              <p>{session.user.email}</p>
+    <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_100%,_#000000_100%)] ">
+      <div className="flex h-screen text-gray-100 bg-transparent backdrop-blur-3xl  ">
+        <div
+          className={`w-1/4 ${sidebarClass} overflow-y-auto flex flex-col mt-16`}
+        >
+          <div className="p-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0">
+            <div>
+              <h2 className="text-lg font-light">Logged in as:</h2>
+              <div
+                className="mt-1 text-sm opacity-75 truncate"
+                title={session.user.email}
+              >
+                <p>{session.user.email}</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => supabase.auth.signOut()}
+                title="Sign Out"
+                className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-gray-700 transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  />
+                </svg>
+              </button>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => supabase.auth.signOut()}
-              title="Sign Out"
-              className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-gray-700 transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
 
-        <div className="p-4 flex-shrink-0">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search contacts..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full rounded-lg ${messageInputClass} py-2 pl-10 pr-4 focus:outline-none focus:ring-2 transition-colors duration-200`}
-            />
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
+          <div className="p-4 flex-shrink-0">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search contacts..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`w-full rounded-lg ${messageInputClass} py-2 pl-10 pr-4 focus:outline-none focus:ring-2 transition-colors duration-200`}
+              />
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex-grow overflow-y-auto">
-          {profiles.length === 0 ? (
-            <div className="p-4 text-gray-500 text-center mt-10">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-12 w-12 mx-auto text-gray-600 mb-2"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-              No contacts found
-            </div>
-          ) : (
-            <div className="space-y-1 px-2 pb-2">
-              {profiles
-                .filter((profile) =>
-                  (profile.username || profile.full_name || "")
-                    ?.toLowerCase()
-                    .includes(searchTerm.toLowerCase())
-                )
-                .map((profile) => (
-                  <div
-                    key={profile.id}
-                    className={`p-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center ${
-                      selectedUser?.id === profile.id
-                        ? "bg-gray-700"
-                        : "hover:bg-gray-800"
-                    }`}
-                    onClick={() => setSelectedUser(profile)}
-                  >
+          <div className="flex-grow overflow-y-auto">
+            {profiles.length === 0 ? (
+              <div className="p-4 text-gray-500 text-center mt-10">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-12 w-12 mx-auto text-gray-600 mb-2"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+                No contacts found
+              </div>
+            ) : (
+              <div className="space-y-1 px-2 pb-2">
+                {profiles
+                  .filter((profile) =>
+                    (profile.username || profile.full_name || "")
+                      ?.toLowerCase()
+                      .includes(searchTerm.toLowerCase())
+                  )
+                  .map((profile) => (
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white mr-3 bg-gray-600 flex-shrink-0" // Fixed dark style, size adjusted, flex-shrink
+                      key={profile.id}
+                      className={`p-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center ${
+                        selectedUser?.id === profile.id
+                          ? "bg-gray-700"
+                          : "hover:bg-gray-800"
+                      }`}
+                      onClick={() => setSelectedUser(profile)}
                     >
-                      {profile.avatar_url ? (
-                        <img
-                          src={profile.avatar_url}
-                          alt={profile.username || profile.full_name}
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-lg font-medium">
-                          {(profile.username || profile.full_name || "U")
-                            .charAt(0)
-                            .toUpperCase()}
-                        </span>
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white mr-3 bg-gray-600 flex-shrink-0" 
+                      >
+                        {profile.avatar_url ? (
+                          <img
+                            src={profile.avatar_url}
+                            alt={profile.username || profile.full_name}
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-lg font-medium">
+                            {(profile.username || profile.full_name || "U")
+                              .charAt(0)
+                              .toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <div className="font-medium truncate">
+                          {profile.username ||
+                            profile.full_name ||
+                            "Anonymous User"}
+                        </div>
+                        {profile.full_name &&
+                          profile.username !== profile.full_name && (
+                            <div className="text-sm opacity-75 truncate">
+                              {profile.full_name}
+                            </div>
+                          )}
+                      </div>
+                      {selectedUser?.id === profile.id && (
+                        <div className="ml-auto pl-2 flex-shrink-0">
+                          <div className="w-2.5 h-2.5 rounded-full bg-indigo-400"></div>
+                        </div>
                       )}
                     </div>
-                    <div className="flex-grow min-w-0">
-                      <div className="font-medium truncate">
-                        {profile.username ||
-                          profile.full_name ||
-                          "Anonymous User"}
-                      </div>
-                      {profile.full_name &&
-                        profile.username !== profile.full_name && (
-                          <div className="text-sm opacity-75 truncate">
-                            {profile.full_name}
-                          </div>
-                        )}
-                    </div>
-                    {selectedUser?.id === profile.id && (
-                      <div className="ml-auto pl-2 flex-shrink-0">
-                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-400"></div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Chat area */}
+        <div className="flex-1 flex flex-col bg-gray-900/50">
+          {selectedUser ? (
+            <>
+              {/* Chat header */}
+              <div className="bg-gray-800 p-4 border-b border-gray-700 flex items-center transition-colors duration-200 flex-shrink-0 mt-18">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white mr-3 bg-gray-600 flex-shrink-0">
+                  {selectedUser.avatar_url ? (
+                    <img
+                      src={selectedUser.avatar_url}
+                      alt={selectedUser.username || selectedUser.full_name}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-lg font-medium">
+                      {(selectedUser.username || selectedUser.full_name || "U")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-medium truncate">
+                    {selectedUser.username ||
+                      selectedUser.full_name ||
+                      "Anonymous User"}
+                  </div>
+                  {selectedUser.full_name &&
+                    selectedUser.username !== selectedUser.full_name && (
+                      <div className="text-sm opacity-75 truncate">
+                        {selectedUser.full_name}
                       </div>
                     )}
+                </div>
+              </div>
+
+              {/* Messages area */}
+              <div
+                ref={chatContainerRef}
+                className="flex-1 p-4 overflow-y-auto space-y-4"
+              >
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center text-gray-400">
+                    <div className="p-4 rounded-full bg-gray-800 mb-4">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-10 w-10"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-lg font-medium text-gray-300">
+                      Start a conversation
+                    </p>
+                    <p className="text-sm opacity-75 max-w-xs mt-2">
+                      Send a message to begin chatting with{" "}
+                      {selectedUser.username ||
+                        selectedUser.full_name ||
+                        "this user"}
+                    </p>
                   </div>
-                ))}
+                ) : (
+                  <>
+                    {messages.map((message) => (
+                      <div
+                        key={message.id} // Use the message ID as key
+                        className={`flex ${
+                          message.sender_id === session.user.id
+                            ? "justify-end"
+                            : "justify-start"
+                        }`}
+                      >
+                        <div
+                          className={`max-w-[70%] md:max-w-[60%] lg:max-w-[50%] px-4 py-2 rounded-xl shadow-md ${
+                            // Adjusted max-width, rounded-xl, shadow
+                            message.sender_id === session.user.id
+                              ? myMessageClass
+                              : otherMessageClass
+                          } ${message.is_optimistic ? "opacity-60" : ""}`}
+                        >
+                          {/* Render text content only if it exists */}
+                          {message.content && (
+                            <div className="whitespace-pre-wrap break-words">
+                              {processContent(message.content)}
+                            </div>
+                          )}
+                          {/* Render attachment if it exists */}
+                          {message.is_attachment &&
+                            renderAttachment(message.attachment_url)}
+                          <div
+                            className={`text-xs opacity-75 text-right mt-1 ${
+                              message.sender_id === session.user.id
+                                ? "text-indigo-200"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {" "}
+                            {/* Conditional timestamp color */}
+                            {formatTime(message.created_at)}
+                            {/* Optionally show optimistic indicator */}
+                            {message.is_optimistic && (
+                              <span className="ml-1">(Sending...)</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} className="h-1" />{" "}
+                    {/* Reference div */}
+                  </>
+                )}
+              </div>
+
+              {/* File preview */}
+              {filePreview && (
+                <div className="p-2 bg-gray-800 border-t border-gray-700 flex-shrink-0">
+                  <div className="flex items-center bg-gray-700 rounded p-2">
+                    <div className="flex-1 flex items-center min-w-0">
+                      {filePreview.type === "image" ? (
+                        <div className="w-10 h-10 mr-3 flex-shrink-0">
+                          <img
+                            src={filePreview.url}
+                            alt="Preview"
+                            className="w-full h-full object-cover rounded"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded flex items-center justify-center mr-3 bg-gray-600 flex-shrink-0">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-6 w-6 text-gray-400"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="flex-grow truncate">
+                        <div className="font-medium truncate text-sm text-gray-200">
+                          {filePreview.name}
+                        </div>
+                        {uploading && (
+                          <div className="w-full bg-gray-600 rounded-full h-1 mt-1">
+                            <div
+                              className="bg-indigo-500 h-1 rounded-full"
+                              style={{
+                                width: "100%",
+                                animation:
+                                  "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                              }}
+                            ></div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={cancelFileUpload}
+                      disabled={uploading} // Disable cancel while uploading
+                      className="ml-2 p-1 rounded-full hover:bg-gray-600 disabled:opacity-50"
+                      title="Cancel upload"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Message input */}
+              <div
+                className="p-4 bg-gray-800 border-t border-gray-700 transition-colors duration-200 flex-shrink-0" // Fixed dark style, added flex-shrink
+              >
+                <form
+                  onSubmit={sendMessage}
+                  className="flex items-end space-x-2"
+                >
+                  {" "}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading} // Disable while uploading
+                    className="p-2 rounded-full text-gray-400 hover:text-indigo-400 hover:bg-gray-700 disabled:opacity-50 flex-shrink-0" // Added flex-shrink
+                    title="Attach file"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-6 w-6"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                      />
+                    </svg>
+                  </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileSelect}
+                    disabled={uploading}
+                  />
+                  <textarea
+                    rows={1} // Start with 1 row
+                    placeholder="Type a message..."
+                    value={newMessage}
+                    onChange={(e) => {
+                      setNewMessage(e.target.value);
+                      e.target.style.height = "auto";
+                      e.target.style.height = `${e.target.scrollHeight}px`;
+                    }}
+                    onKeyDown={(e) => {
+                      // Send on Enter, new line on Shift+Enter
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage(e);
+                      }
+                    }}
+                    disabled={uploading}
+                    className={`flex-1 rounded-lg ${messageInputClass} py-2 px-4 focus:outline-none focus:ring-2 resize-none overflow-y-auto max-h-24`} // Added resize-none, overflow-y-auto, max-h
+                    style={{ height: "auto" }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={uploading || (!newMessage.trim() && !filePreview)}
+                    className={`px-4 py-2 rounded-lg text-white ${buttonClass} disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex-shrink-0 h-10`} // Fixed height, added flex-shrink
+                    title="Send message"
+                  >
+                    {uploading ? (
+                      <div className="flex items-center justify-center w-5 h-5">
+                        {" "}
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      </div>
+                    ) : (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                      </svg>
+                    )}
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-gray-400">
+              <div className="p-6 rounded-full bg-gray-800 mb-6">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-14 w-14"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-semibold text-gray-300">
+                Select a Conversation
+              </h2>
+              <p className="mt-2 text-center max-w-sm">
+                {" "}
+                {/* Wider max-width */}
+                Choose a contact from the sidebar to start chatting or continue
+                a previous conversation.
+              </p>
             </div>
           )}
         </div>
       </div>
-
-      {/* Chat area */}
-      <div className="flex-1 flex flex-col bg-gray-900/50">
-        {selectedUser ? (
-          <>
-            {/* Chat header */}
-            <div className="bg-gray-800 p-4 border-b border-gray-700 flex items-center transition-colors duration-200 flex-shrink-0">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white mr-3 bg-gray-600 flex-shrink-0">
-                {selectedUser.avatar_url ? (
-                  <img
-                    src={selectedUser.avatar_url}
-                    alt={selectedUser.username || selectedUser.full_name}
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <span className="text-lg font-medium">
-                    {(selectedUser.username || selectedUser.full_name || "U")
-                      .charAt(0)
-                      .toUpperCase()}
-                  </span>
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className="font-medium truncate">
-                  {selectedUser.username ||
-                    selectedUser.full_name ||
-                    "Anonymous User"}
-                </div>
-                {selectedUser.full_name &&
-                  selectedUser.username !== selectedUser.full_name && (
-                    <div className="text-sm opacity-75 truncate">
-                      {selectedUser.full_name}
-                    </div>
-                  )}
-              </div>
-            </div>
-
-            {/* Messages area */}
-            <div
-              ref={chatContainerRef}
-              className="flex-1 p-4 overflow-y-auto space-y-4"
-            >
-              {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center text-gray-400">
-                  <div className="p-4 rounded-full bg-gray-800 mb-4">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-10 w-10"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-lg font-medium text-gray-300">
-                    Start a conversation
-                  </p>
-                  <p className="text-sm opacity-75 max-w-xs mt-2">
-                    Send a message to begin chatting with{" "}
-                    {selectedUser.username ||
-                      selectedUser.full_name ||
-                      "this user"}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {messages.map((message) => (
-                    <div
-                      key={message.id} // Use the message ID as key
-                      className={`flex ${
-                        message.sender_id === session.user.id
-                          ? "justify-end"
-                          : "justify-start"
-                      }`}
-                    >
-                      <div
-                        className={`max-w-[70%] md:max-w-[60%] lg:max-w-[50%] px-4 py-2 rounded-xl shadow-md ${
-                          // Adjusted max-width, rounded-xl, shadow
-                          message.sender_id === session.user.id
-                            ? myMessageClass
-                            : otherMessageClass
-                        } ${message.is_optimistic ? "opacity-60" : ""}`}
-                      >
-                        {/* Render text content only if it exists */}
-                        {message.content && (
-                          <div className="whitespace-pre-wrap break-words">
-                            {processContent(message.content)}
-                          </div>
-                        )}
-                        {/* Render attachment if it exists */}
-                        {message.is_attachment &&
-                          renderAttachment(message.attachment_url)}
-                        <div
-                          className={`text-xs opacity-75 text-right mt-1 ${
-                            message.sender_id === session.user.id
-                              ? "text-indigo-200"
-                              : "text-gray-400"
-                          }`}
-                        >
-                          {" "}
-                          {/* Conditional timestamp color */}
-                          {formatTime(message.created_at)}
-                          {/* Optionally show optimistic indicator */}
-                          {message.is_optimistic && (
-                            <span className="ml-1">(Sending...)</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <div ref={messagesEndRef} className="h-1" />{" "}
-                  {/* Reference div */}
-                </>
-              )}
-            </div>
-
-            {/* File preview */}
-            {filePreview && (
-              <div className="p-2 bg-gray-800 border-t border-gray-700 flex-shrink-0">
-                <div className="flex items-center bg-gray-700 rounded p-2">
-                  <div className="flex-1 flex items-center min-w-0">
-                    {filePreview.type === "image" ? (
-                      <div className="w-10 h-10 mr-3 flex-shrink-0">
-                        <img
-                          src={filePreview.url}
-                          alt="Preview"
-                          className="w-full h-full object-cover rounded"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-10 h-10 rounded flex items-center justify-center mr-3 bg-gray-600 flex-shrink-0">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-6 w-6 text-gray-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                      </div>
-                    )}
-                    <div className="flex-grow truncate">
-                      <div className="font-medium truncate text-sm text-gray-200">
-                        {filePreview.name}
-                      </div>
-                      {uploading && (
-                        <div className="w-full bg-gray-600 rounded-full h-1 mt-1">
-                          <div
-                            className="bg-indigo-500 h-1 rounded-full"
-                            style={{
-                              width: "100%",
-                              animation:
-                                "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-                            }}
-                          ></div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={cancelFileUpload}
-                    disabled={uploading} // Disable cancel while uploading
-                    className="ml-2 p-1 rounded-full hover:bg-gray-600 disabled:opacity-50"
-                    title="Cancel upload"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Message input */}
-            <div
-              className="p-4 bg-gray-800 border-t border-gray-700 transition-colors duration-200 flex-shrink-0" // Fixed dark style, added flex-shrink
-            >
-              <form onSubmit={sendMessage} className="flex items-end space-x-2">
-                {" "}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading} // Disable while uploading
-                  className="p-2 rounded-full text-gray-400 hover:text-indigo-400 hover:bg-gray-700 disabled:opacity-50 flex-shrink-0" // Added flex-shrink
-                  title="Attach file"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                    />
-                  </svg>
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={handleFileSelect}
-                  disabled={uploading}
-                />
-                <textarea
-                  rows={1} // Start with 1 row
-                  placeholder="Type a message..."
-                  value={newMessage}
-                  onChange={(e) => {
-                    setNewMessage(e.target.value);
-                    e.target.style.height = "auto";
-                    e.target.style.height = `${e.target.scrollHeight}px`;
-                  }}
-                  onKeyDown={(e) => {
-                    // Send on Enter, new line on Shift+Enter
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault(); 
-                      sendMessage(e); 
-                    }
-                  }}
-                  disabled={uploading}
-                  className={`flex-1 rounded-lg ${messageInputClass} py-2 px-4 focus:outline-none focus:ring-2 resize-none overflow-y-auto max-h-24`} // Added resize-none, overflow-y-auto, max-h
-                  style={{ height: "auto" }} 
-                />
-                <button
-                  type="submit"
-                  disabled={uploading || (!newMessage.trim() && !filePreview)}
-                  className={`px-4 py-2 rounded-lg text-white ${buttonClass} disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex-shrink-0 h-10`} // Fixed height, added flex-shrink
-                  title="Send message"
-                >
-                  {uploading ? (
-                    <div className="flex items-center justify-center w-5 h-5">
-                      {" "}
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    </div>
-                  ) : (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                    </svg> 
-                  )}
-                </button>
-              </form>
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-gray-400">
-            <div
-              className="p-6 rounded-full bg-gray-800 mb-6" 
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-14 w-14" 
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5} 
-                  d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-semibold text-gray-300">
-              Select a Conversation
-            </h2>
-            <p className="mt-2 text-center max-w-sm">
-              {" "}
-              {/* Wider max-width */}
-              Choose a contact from the sidebar to start chatting or continue a
-              previous conversation.
-            </p>
-          </div>
-        )}
-      </div>
-    </div></div>
+    </div>
   );
 }
 
