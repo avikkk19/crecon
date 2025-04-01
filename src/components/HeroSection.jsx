@@ -55,12 +55,13 @@ const HeroSection = () => {
 
   // Part 1: Main Hero Section Component
   return (
-    <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_40%,_#000000_80%)]">
-      <div className="relative min-h-screen bg-opacity-50 text-white overflow-hidden">
+    <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_40%,_#000000_80%)] ">
+      <div className="relative min-h-screen bg-opacity-50 text-white overflow-hidden backdrop-blur-3xl">
         {/* Main Hero Section */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-24 m-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-24 m-18 ">
           <div className="text-center py-20">
             <h1 className="text-6xl sm:text-6xl font-bold mb-8 leading-tight tracking-tighter">
+              
               Simplify your
               <br />
               work with moongdal

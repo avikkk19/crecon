@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import logo from "/src/assets/logo.png";
+import logo from "../../public/logo.svg";
 import { supabase } from "./SupabaseClient.jsx";
 
 const Navbar = () => {
@@ -71,8 +71,9 @@ const Navbar = () => {
       <div className="mx-auto flex justify-between items-center">
         {/* Logo - Fixed width to prevent shifting */}
         <div className="flex items-center w-1/4">
-          <img src={logo} alt="Logo" className="h-8 w-auto" />
-          <span className="ml-2 font-semibold text-gray-300">moongdal</span>
+          <img src={logo} alt="Logo" className="h-5 w-auto fill-white stroke-gray-300" />
+          
+          <span className="ml-2 font-semibold text-gray-300">Crecon</span>
         </div>
 
         {/* Navigation Links - Fixed position in center */}
