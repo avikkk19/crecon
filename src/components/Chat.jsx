@@ -132,6 +132,7 @@ function Chat() {
     return new Date(timestamp).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
+      // second: "2-digit",
     });
   }
 
@@ -654,7 +655,7 @@ function Chat() {
 
   const sidebarClass = "bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_100%,_#000000_100%)]border-r border-gray-700";
   const messageInputClass = "bg-gray-900 border-gray-600 focus:ring-indigo-500 text-gray-100 placeholder-gray-500";
-  const buttonClass = "bg-indigo-600 hover:bg-indigo-700";
+  const buttonClass = "bg-zinc-900 hover:bg-zinc-800";
   const myMessageClass = "bg-indigo-700 text-white";
   const otherMessageClass = "bg-gray-800 text-gray-100";
 
@@ -718,7 +719,7 @@ function Chat() {
                       </div>
                       <div className="min-w-0">
                         <p className="font-medium truncate">
-                          {selectedUser.username || selectedUser.full_name || "Select Contact"}
+                          {selectedUser.username.split("@")[2] || selectedUser.full_name || "Select Contact"}
                         </p>
                       </div>
                     </>
@@ -847,7 +848,7 @@ function Chat() {
             <h3 className="text-sm text-gray-400 uppercase tracking-wider mb-3 font-medium">Recent Chats</h3>
             {profiles.length > 0 ? (
               <div className="space-y-2">
-                {profiles.slice(0, 5).map((profile) => (
+                {profiles.slice(0, 15).map((profile) => (
                   <div
                     key={profile.id}
                     className={`p-3 rounded-lg cursor-pointer transition-all duration-200 flex items-center ${
@@ -874,10 +875,9 @@ function Chat() {
                     </div>
                     <div className="flex-grow min-w-0">
                       <div className="font-medium truncate">
-                        {profile.username || profile.full_name || "Anonymous User"}
+                        {profile.username.split("@")[0] || profile.full_name || "Anonymous User"}
                       </div>
                       <div className="text-xs text-gray-400 truncate">
-                        {/* Could show last message preview here */}
                         Click to open conversation
                       </div>
                     </div>
@@ -928,7 +928,7 @@ function Chat() {
                     "Current User"}
                 </div>
                 <div className="text-xs text-gray-400 truncate">
-                  {session?.user?.email}
+                  {session?.user?.email.split("@")[0]}
                 </div>
               </div>
               <button
@@ -1188,14 +1188,14 @@ function Chat() {
                       placeholder={
                         uploading
                           ? "Uploading attachment..."
-                          : "Type your message..."
+                          : "Type your message here "
                       }
                       className={`w-full rounded-full py-3 px-4 pr-10 ${messageInputClass} focus:outline-none focus:ring-1`}
                       disabled={uploading}
                     />
                     {uploading && (
                       <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-indigo-500"></div>
+                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-zinc-500"></div>
                       </div>
                     )}
                   </div>
@@ -1234,7 +1234,7 @@ function Chat() {
               <div className="w-24 h-24 rounded-full bg-gray-800 flex items-center justify-center mb-6">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-12 w-12 text-indigo-500"
+                  className="h-12 w-12 text-white"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
