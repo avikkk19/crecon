@@ -64,7 +64,7 @@ const HeroSection = () => {
               
               Simplify your
               <br />
-              work with moongdal
+              work with cercon.
             </h1>
             <div className="max-w-4xl mx-auto">
               <p className="text-2xl sm:text-2xl mb-6 hover:text-zinc-300 hover:underline decoration-4 decoration-zinc-600 ">
