@@ -689,9 +689,9 @@ function Chat() {
 
   return (
     <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_100%,_#000000_100%)]">
-      <div className="flex h-screen text-gray-100 bg-transparent backdrop-blur-3xl">
+      <div className="flex h-screen text-gray-100 bg-transparent backdrop-blur-3xl ">
         {/* Users sidebar with dropdown */}
-        <div className={`w-1/4 ${sidebarClass} overflow-y-auto flex flex-col mt-18`}>
+        <div className={`w-1/4 ${sidebarClass} overflow-y-auto flex flex-col mt-18 border border-gray-800`}>
           <div className="p-4 flex-shrink-0">
             {/* Dropdown menu for users */}
             <div className="relative" ref={dropdownRef}>
@@ -906,7 +906,7 @@ function Chat() {
           </div>
 
           {/* User profile section */}
-          <div className="p-4 border-t border-gray-700 mt-auto">
+          <div className="p-4  mt-auto m-3 rounded-full bg-transparent">
             <div className="flex items-center">
               <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center mr-3">
                 {session?.user?.user_metadata?.avatar_url ? (
@@ -933,7 +933,7 @@ function Chat() {
               </div>
               <button
                 onClick={() => supabase.auth.signOut()}
-                className="ml-2 p-2 text-gray-400 hover:text-white rounded-full hover:bg-gray-700 transition-colors"
+                className="ml-2 p-2 text-red-400 hover:text-white rounded-full hover:bg-red-700 transition-colors"
                 title="Sign Out"
               >
                 <svg
@@ -956,7 +956,7 @@ function Chat() {
         </div>
 
         {/* Main chat area */}
-        <div className="flex-1 flex flex-col bg-gray-900/70 backdrop-blur-sm">
+        <div className="flex-1 flex flex-col bg-transparent backdrop-blur-sm">
           {selectedUser ? (
             <>
               {/* Chat header */}
@@ -1150,7 +1150,7 @@ function Chat() {
               )}
 
               {/* Message input */}
-              <div className="p-4 border-t border-gray-700">
+              <div className="p-3  rounded-full m-4 bg-trasparent">
                 <form onSubmit={sendMessage} className="flex items-center">
                   <button
                     type="button"
@@ -1190,7 +1190,7 @@ function Chat() {
                           ? "Uploading attachment..."
                           : "Type your message here "
                       }
-                      className={`w-full rounded-full py-3 px-4 pr-10 ${messageInputClass} focus:outline-none focus:ring-1`}
+                      className={`w-full rounded-full py-3 px-4 pr-10 ${messageInputClass} focus:outline-none focus:ring-1 focus:ring-zinc-800 bg-zinc-900`}
                       disabled={uploading}
                     />
                     {uploading && (
