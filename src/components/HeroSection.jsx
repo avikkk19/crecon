@@ -416,7 +416,7 @@ const HeroSection = () => {
                         Debugged errors
                       </span>
                       <span className="text-xs text-gray-400 ml-2">
-                        by kondaReddy
+                        by kondaReddyyy
                       </span>
                     </div>
                   </div>
