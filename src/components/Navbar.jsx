@@ -70,11 +70,17 @@ const Navbar = () => {
     <nav className="bg-transparent shadow-xs backdrop-blur-3xl py-4 px-4 sm:px-6 fixed top-0 left-0 right-0 z-50">
       <div className="mx-auto flex justify-between items-center">
         {/* Logo - Fixed width to prevent shifting */}
-        <div className="flex items-center w-1/4">
-          <img src={logo} alt="Logo" className="h-5 w-auto fill-white stroke-gray-300" />
-          
-          <span className="ml-2 font-semibold text-gray-300">Crecon</span>
-        </div>
+        <a className="flex items-center w-1/4" href="/">
+          <div className="flex items-center">
+            <img
+              src={logo}
+              alt="Logo"
+              className="h-5 w-auto fill-white stroke-gray-300"
+            />
+
+            <span className="ml-2 font-semibold text-gray-300">Crecon</span>
+          </div>
+        </a>
 
         {/* Navigation Links - Fixed position in center */}
         <div className="hidden md:flex items-center justify-center w-2/4">
@@ -272,7 +278,6 @@ const Navbar = () => {
                   </div>
                 </div>
                 <div className="mt-3 px-2 space-y-1">
-                 
                   <button
                     onClick={handleSignOut}
                     className="block w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-gray-700"

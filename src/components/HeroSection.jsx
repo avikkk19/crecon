@@ -161,10 +161,23 @@ const HeroSection = () => {
     }
   }, [selectedSection]);
 
+  useEffect(() => {
+    if (heroContainerRef.current) {
+      // Background subtle animation
+      gsap.to(heroContainerRef.current, {
+        backgroundPosition: "100% 100%",
+        duration: 15,
+        repeat: -1,
+        yoyo: true,
+      });
+    }
+  }, []);
+
   return (
     <div
       ref={heroContainerRef}
       className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_40%,_#000000_80%)]"
+      // style={{ backgroundSize: "200% 200%", backgroundPosition: "10% 10%" }}
     >
       <div className="relative min-h-screen bg-opacity-50 text-white overflow-hidden backdrop-blur-3xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-24">

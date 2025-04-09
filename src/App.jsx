@@ -10,6 +10,10 @@ import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
 import ModernChatInterface from "./components/Chat.jsx";
 import Footer from "./components/Footer.jsx";
 import Blog from "./components/Blog.jsx";
+import Tandc from "./components/pages/Tandc.jsx";
+import Privacy from "./components/pages/Privacy.jsx";
+import Security from "./components/pages/Security.jsx";
+import Abtdev from "./components/pages/Abtdev.jsx";
 
 const App = () => {
   return (
@@ -36,6 +40,11 @@ const App = () => {
             </AuthRoute>
           }
         />
+        {/* Public routes */}
+        <Route path="/tandc" element={<Tandc />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/security" element={<Security />} />
+        <Route path="/abtdev" element={<Abtdev />} />
 
         {/* Protected routes - require authentication */}
         <Route
