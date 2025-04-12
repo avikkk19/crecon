@@ -753,9 +753,9 @@ function Chat() {
                     selectedUser.full_name ||
                     "Anonymous User"}
                 </div>
-                <div className="text-xs text-gray-400">
+                {/* <div className="text-xs text-gray-400">
                   {selectedUser.status === "online" ? "Online" : "Offline"}
-                </div>
+                </div> */}
               </div>
             </div>
           </div>
@@ -900,9 +900,12 @@ function Chat() {
                   <div className="font-medium text-white">
                     {profile.username || profile.full_name || "Anonymous User"}
                   </div>
-                  <div className="text-sm text-gray-400">
+                  {/* <div className="text-sm text-gray-400">
                     {profile.status === "online" ? "Online" : "Offline"}
-                  </div>
+                  </div> */}
+                  <h1 className="text-xm text-gray-500">
+                    Select to start conversation
+                  </h1>
                 </div>
               </div>
             ))}
@@ -910,10 +913,9 @@ function Chat() {
         </div>
 
         {/* Main Chat Area */}
-        <div className={`flex-1 flex flex-col ${isMobileView ? "w-full" : ""}`}>
+        <div className={`flex-1 flex flex-col ${isMobileView ? "w-full" : ""} md: mt-18`}>
           {selectedUser ? (
             <>
-              {/* Chat Header - Hidden on mobile as we have the fixed header */}
               {!isMobileView && (
                 <div className="p-4 border-b border-gray-700 bg-gray-800/50 backdrop-blur-sm">
                   <div className="flex items-center">
@@ -1111,12 +1113,19 @@ function Chat() {
                     />
                   </svg>
                 </div>
-                <h2 className="text-2xl font-bold mb-2 text-zinc-200">
-                  Welcome to Crecon
-                </h2>
-                <p className="text-gray-400 mb-6">
-                  Select a conversation to start chatting
-                </p>
+
+                {isMobileView ? (
+                  ""
+                ) : (
+                  <>
+                    <h2 className="text-2xl font-bold mb-2 text-zinc-200">
+                      Welcome to Crecon
+                    </h2>
+                    <p className="text-gray-400 mb-6">
+                      Select a conversation to start chatting
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           )}
