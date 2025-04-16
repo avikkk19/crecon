@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import logo from "../../public/logo.svg";
 import { supabase } from "./SupabaseClient.jsx";
+import { Link } from "react-router-dom";
 
 const Navbar = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [followRequests, setFollowRequests] = useState([]);
+  const [unreadRequests, setUnreadRequests] = useState(0);
   const dropdownRef = useRef(null);
   const mobileMenuRef = useRef(null);
 
@@ -34,6 +38,131 @@ const Navbar = () => {
       subscription?.unsubscribe();
     };
   }, []);
+
+  // Fetch follow requests
+  useEffect(() => {
+    if (user) {
+      fetchFollowRequests();
+      setupFollowRequestsSubscription();
+    }
+  }, [user]);
+
+  const fetchFollowRequests = async () => {
+    try {
+      // First fetch the follow requests
+      const { data: requests, error: requestsError } = await supabase
+        .from("follow_requests")
+        .select("id, sender_id, status, created_at")
+        .eq("receiver_id", user.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      if (requestsError) throw requestsError;
+
+      // Then fetch the sender profiles
+      const senderIds = requests?.map((request) => request.sender_id) || [];
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, username, full_name")
+        .in("id", senderIds);
+
+      if (profilesError) throw profilesError;
+
+      // Combine the data
+      const combinedData =
+        requests?.map((request) => ({
+          ...request,
+          sender: profiles?.find((profile) => profile.id === request.sender_id),
+        })) || [];
+
+      setFollowRequests(combinedData);
+      setUnreadRequests(combinedData.length);
+    } catch (error) {
+      console.error("Error fetching follow requests:", error);
+    }
+  };
+
+  const setupFollowRequestsSubscription = () => {
+    const channel = supabase
+      .channel("follow_requests")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "follow_requests",
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setFollowRequests((prev) => [...prev, payload.new]);
+            setUnreadRequests((prev) => prev + 1);
+          } else if (payload.eventType === "UPDATE") {
+            setFollowRequests((prev) =>
+              prev.map((request) =>
+                request.id === payload.new.id ? payload.new : request
+              )
+            );
+          } else if (payload.eventType === "DELETE") {
+            setFollowRequests((prev) =>
+              prev.filter((request) => request.id !== payload.old.id)
+            );
+            setUnreadRequests((prev) => Math.max(0, prev - 1));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  };
+
+  const handleFollowRequestResponse = async (requestId, accepted) => {
+    try {
+      const { error: updateError } = await supabase
+        .from("follow_requests")
+        .update({ status: accepted ? "accepted" : "rejected" })
+        .eq("id", requestId);
+
+      if (updateError) throw updateError;
+
+      if (accepted) {
+        const request = followRequests.find((r) => r.id === requestId);
+        if (request) {
+          // First check if relationship already exists
+          const { data: existingRelationship, error: checkError } =
+            await supabase
+              .from("user_relationships")
+              .select("id")
+              .eq("user_id", user.id)
+              .eq("following_id", request.sender_id)
+              .single();
+
+          if (checkError && checkError.code !== "PGRST116") {
+            // PGRST116 is "no rows returned"
+            throw checkError;
+          }
+
+          if (!existingRelationship) {
+            const { error: relationshipError } = await supabase
+              .from("user_relationships")
+              .insert({
+                user_id: user.id,
+                following_id: request.sender_id,
+              });
+
+            if (relationshipError) throw relationshipError;
+          }
+        }
+      }
+
+      setFollowRequests((prev) => prev.filter((r) => r.id !== requestId));
+      setUnreadRequests((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error("Error handling follow request:", error);
+    }
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -224,6 +353,97 @@ const Navbar = () => {
                 >
                   Sign up
                 </a>
+              </div>
+            )}
+          </div>
+
+          {/* Notifications */}
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 hover:bg-gray-700 rounded-full"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                />
+              </svg>
+              {unreadRequests > 0 && (
+                <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {unreadRequests}
+                </span>
+              )}
+            </button>
+
+            {/* Notifications Dropdown */}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-50">
+                <div className="p-4 border-b border-gray-700">
+                  <h3 className="font-semibold">Follow Requests</h3>
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  {followRequests.length === 0 ? (
+                    <div className="p-4 text-gray-400 text-center">
+                      No pending requests
+                    </div>
+                  ) : (
+                    followRequests.map((request, index) => (
+                      <div
+                        key={`request-${request.id}-${index}`}
+                        className="p-4 border-b border-gray-700 hover:bg-gray-700"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+                              <span className="text-white font-medium">
+                                {(request.sender?.username || "U")
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="font-medium">
+                                {request.sender?.full_name ||
+                                  request.sender?.username ||
+                                  "Unknown User"}
+                              </p>
+                              <p className="text-sm text-gray-400">
+                                Wants to follow you
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() =>
+                                handleFollowRequestResponse(request.id, true)
+                              }
+                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleFollowRequestResponse(request.id, false)
+                              }
+                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>

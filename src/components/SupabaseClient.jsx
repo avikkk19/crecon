@@ -92,229 +92,194 @@ export const supabaseEdgeFunctions = {
 };
 
 // Database schema setup for the Snapchat-style Chat Application
-export const setupDatabase = async () => {
-  // Enable Row Level Security (RLS)
-  const enableRls = async (table) => {
-    await supabase.rpc("pg_enable_row_level_security", { table_name: table });
-  };
+export async function setupDatabase() {
+  // Check localStorage for policy permission status to avoid repeated API calls
+  if (localStorage.getItem("policyPermissionDenied") === "true") {
+    console.log(
+      "Skipping policy creation due to previously detected permission issues"
+    );
+    return;
+  }
 
   try {
-    // Create tables if they don't exist
-    const tables = [
-      {
-        name: "users",
-        query: `
-          CREATE TABLE IF NOT EXISTS users (
-            id UUID REFERENCES auth.users PRIMARY KEY,
-            name TEXT,
-            email TEXT,
-            avatar_url TEXT,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-          );
-        `,
-      },
-      {
-        name: "conversations",
-        query: `
-          CREATE TABLE IF NOT EXISTS conversations (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            created_at TIMESTAMPTZ DEFAULT NOW()
-          );
-        `,
-      },
-      {
-        name: "conversation_participants",
-        query: `
-          CREATE TABLE IF NOT EXISTS conversation_participants (
-            conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            PRIMARY KEY (conversation_id, user_id)
-          );
-        `,
-      },
-      {
-        name: "messages",
-        query: `
-          CREATE TABLE IF NOT EXISTS messages (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-            sender_id UUID REFERENCES users(id) ON DELETE SET NULL,
-            content TEXT,
-            message_type TEXT DEFAULT 'text',
-            media_url TEXT,
-            link_url TEXT,
-            link_preview JSONB,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            expires_at TIMESTAMPTZ NOT NULL
-          );
-        `,
-      },
-      {
-        name: "user_presence",
-        query: `
-          CREATE TABLE IF NOT EXISTS user_presence (
-            user_id UUID REFERENCES users(id) ON DELETE CASCADE PRIMARY KEY,
-            status TEXT DEFAULT 'offline',
-            last_seen TIMESTAMPTZ DEFAULT NOW()
-          );
-        `,
-      },
-      {
-        name: "user_notification_tokens",
-        query: `
-          CREATE TABLE IF NOT EXISTS user_notification_tokens (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-            token TEXT NOT NULL,
-            platform TEXT,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            UNIQUE(user_id, token)
-          );
-        `,
-      },
-    ];
+    // Track policy creation permission status to avoid repeated attempts
+    let hasPolicyCreationPermission = true;
 
-    // Create tables
-    for (const table of tables) {
-      const { error } = await supabase.rpc("pgrunner", { query: table.query });
-
-      if (error) {
-        console.error(`Error creating ${table.name} table:`, error);
-        continue;
+    // Check if tables exist and create them if they don't
+    const { error: tablesError } = await supabase.rpc(
+      "check_and_create_tables"
+    );
+    if (tablesError) {
+      console.error("Error checking/creating tables:", tablesError);
+      // Continue execution even if there's an error with tables
+      if (tablesError.code === "42501" || tablesError.code === "403") {
+        hasPolicyCreationPermission = false;
+        // Remember this permission issue
+        localStorage.setItem("policyPermissionDenied", "true");
       }
-
-      // Enable RLS on this table
-      await enableRls(table.name);
-      console.log(`Created table: ${table.name}`);
     }
 
-    // Create security policies
-    const policies = [
-      // Users can read all user profiles
-      {
-        query: `
-          CREATE POLICY "Public profiles are viewable by everyone" ON users
-          FOR SELECT USING (true);
-        `,
-      },
-      // Users can update only their own profile
-      {
-        query: `
-          CREATE POLICY "Users can update their own profile" ON users
-          FOR UPDATE USING (auth.uid() = id);
-        `,
-      },
-      // Users can view conversations they're part of
-      {
-        query: `
-          CREATE POLICY "Users can view their conversations" ON conversations
-          FOR SELECT USING (
-            EXISTS (
-              SELECT 1 FROM conversation_participants
-              WHERE conversation_id = id AND user_id = auth.uid()
-            )
+    // Only try to create policies if we have permission
+    if (hasPolicyCreationPermission) {
+      // Check if policies exist and create them if they don't
+      const { error: policiesError } = await supabase.rpc(
+        "check_and_create_policies"
+      );
+      if (policiesError) {
+        // If the error is about policies already existing, we can ignore it
+        if (policiesError.code === "42710") {
+          console.log("Policies already exist, continuing...");
+        } else if (
+          policiesError.code === "42501" ||
+          policiesError.code === "403"
+        ) {
+          console.log(
+            "No permission to create policies, skipping all policy creation steps..."
           );
-        `,
-      },
-      // Users can insert new conversations
-      {
-        query: `
-          CREATE POLICY "Users can create conversations" ON conversations
-          FOR INSERT WITH CHECK (true);
-        `,
-      },
-      // Users can see participants of their conversations
-      {
-        query: `
-          CREATE POLICY "Users can see participants of their conversations" ON conversation_participants
-          FOR SELECT USING (
-            EXISTS (
-              SELECT 1 FROM conversation_participants
-              WHERE conversation_id = conversation_participants.conversation_id AND user_id = auth.uid()
-            )
-          );
-        `,
-      },
-      // Users can add participants to conversations
-      {
-        query: `
-          CREATE POLICY "Users can add participants to conversations" ON conversation_participants
-          FOR INSERT WITH CHECK (
-            EXISTS (
-              SELECT 1 FROM conversation_participants
-              WHERE conversation_id = conversation_participants.conversation_id AND user_id = auth.uid()
-            ) OR
-            (conversation_participants.user_id = auth.uid())
-          );
-        `,
-      },
-      // Users can see messages in their conversations
-      {
-        query: `
-          CREATE POLICY "Users can view messages in their conversations" ON messages
-          FOR SELECT USING (
-            EXISTS (
-              SELECT 1 FROM conversation_participants
-              WHERE conversation_id = messages.conversation_id AND user_id = auth.uid()
-            )
-          );
-        `,
-      },
-      // Users can insert messages in their conversations
-      {
-        query: `
-          CREATE POLICY "Users can send messages to their conversations" ON messages
-          FOR INSERT WITH CHECK (
-            EXISTS (
-              SELECT 1 FROM conversation_participants
-              WHERE conversation_id = messages.conversation_id AND user_id = auth.uid()
-            ) AND sender_id = auth.uid()
-          );
-        `,
-      },
-      // Users can view online status of other users
-      {
-        query: `
-          CREATE POLICY "Users can view others' online status" ON user_presence
-          FOR SELECT USING (true);
-        `,
-      },
-      // Users can update only their own presence
-      {
-        query: `
-          CREATE POLICY "Users can update their own presence" ON user_presence
-          FOR UPDATE USING (user_id = auth.uid());
-        `,
-      },
-      // Users can register notification tokens for themselves
-      {
-        query: `
-          CREATE POLICY "Users can register notification tokens" ON user_notification_tokens
-          FOR INSERT WITH CHECK (user_id = auth.uid());
-        `,
-      },
-      // Users can delete their own tokens
-      {
-        query: `
-          CREATE POLICY "Users can delete their notification tokens" ON user_notification_tokens
-          FOR DELETE USING (user_id = auth.uid());
-        `,
-      },
-    ];
-
-    // Create policies
-    for (const policy of policies) {
-      const { error } = await supabase.rpc("pgrunner", { query: policy.query });
-      if (error) {
-        console.error("Error creating policy:", error);
+          hasPolicyCreationPermission = false;
+          // Remember this permission issue
+          localStorage.setItem("policyPermissionDenied", "true");
+        } else {
+          console.error("Error checking/creating policies:", policiesError);
+        }
       }
+    }
+
+    // Skip all policy creation if we've determined we don't have permission
+    if (!hasPolicyCreationPermission) {
+      console.log(
+        "Database setup completed - skipped policy creation due to permission issues"
+      );
+      return;
+    }
+
+    // Add specific policies for user_presence
+    try {
+      const { error: presencePoliciesError } = await supabase.rpc(
+        "create_presence_policies"
+      );
+      if (presencePoliciesError) {
+        if (presencePoliciesError.code === "42710") {
+          console.log("Presence policies already exist, continuing...");
+        } else if (
+          presencePoliciesError.code === "42501" ||
+          presencePoliciesError.code === "403"
+        ) {
+          console.log(
+            "No permission to create presence policies, skipping remaining policy creation..."
+          );
+          // Remember this permission issue
+          localStorage.setItem("policyPermissionDenied", "true");
+          // Exit early
+          console.log(
+            "Database setup completed - stopped at presence policies"
+          );
+          return;
+        } else {
+          console.error(
+            "Error creating presence policies:",
+            presencePoliciesError
+          );
+        }
+      }
+    } catch (error) {
+      console.log("Skipping presence policies creation:", error.message);
+      if (error.code === "42501" || error.code === "403") {
+        localStorage.setItem("policyPermissionDenied", "true");
+        return;
+      }
+    }
+
+    // Add specific policies for follow_requests
+    try {
+      const { error: followPoliciesError } = await supabase.rpc(
+        "create_follow_policies"
+      );
+      if (followPoliciesError) {
+        if (followPoliciesError.code === "42710") {
+          console.log("Follow request policies already exist, continuing...");
+        } else if (
+          followPoliciesError.code === "42501" ||
+          followPoliciesError.code === "403"
+        ) {
+          console.log(
+            "No permission to create follow policies, skipping remaining policy creation..."
+          );
+          localStorage.setItem("policyPermissionDenied", "true");
+          return;
+        } else {
+          console.error("Error creating follow policies:", followPoliciesError);
+        }
+      }
+    } catch (error) {
+      console.log("Skipping follow policies creation:", error.message);
+      if (error.code === "42501" || error.code === "403") {
+        localStorage.setItem("policyPermissionDenied", "true");
+        return;
+      }
+    }
+
+    // Add specific policies for user_relationships
+    try {
+      const { error: relationshipPoliciesError } = await supabase.rpc(
+        "create_relationship_policies"
+      );
+      if (relationshipPoliciesError) {
+        if (relationshipPoliciesError.code === "42710") {
+          console.log("Relationship policies already exist, continuing...");
+        } else if (
+          relationshipPoliciesError.code === "42501" ||
+          relationshipPoliciesError.code === "403"
+        ) {
+          console.log(
+            "No permission to create relationship policies, skipping remaining policy creation..."
+          );
+          localStorage.setItem("policyPermissionDenied", "true");
+          return;
+        } else {
+          console.error(
+            "Error creating relationship policies:",
+            relationshipPoliciesError
+          );
+        }
+      }
+    } catch (error) {
+      console.log("Skipping relationship policies creation:", error.message);
+      if (error.code === "42501" || error.code === "403") {
+        localStorage.setItem("policyPermissionDenied", "true");
+        return;
+      }
+    }
+
+    // Add specific policies for conversation_participants
+    try {
+      const { error: conversationPoliciesError } = await supabase.rpc(
+        "create_conversation_policies"
+      );
+      if (conversationPoliciesError) {
+        if (conversationPoliciesError.code === "42710") {
+          console.log("Conversation policies already exist, continuing...");
+        } else if (
+          conversationPoliciesError.code === "42501" ||
+          conversationPoliciesError.code === "403"
+        ) {
+          console.log(
+            "No permission to create conversation policies, skipping..."
+          );
+          localStorage.setItem("policyPermissionDenied", "true");
+        } else {
+          console.error(
+            "Error creating conversation policies:",
+            conversationPoliciesError
+          );
+        }
+      }
+    } catch (error) {
+      console.log("Skipping conversation policies creation:", error.message);
     }
 
     console.log("Database setup completed successfully");
-    return { success: true };
   } catch (error) {
     console.error("Error setting up database:", error);
-    return { success: false, error };
   }
-};
+}

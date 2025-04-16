@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { supabase } from "./SupabaseClient.jsx";
+import { supabase, setupDatabase } from "./SupabaseClient.jsx";
 
 // Constants
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
@@ -18,6 +18,12 @@ function Chat() {
   const [filePreview, setFilePreview] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [followRequests, setFollowRequests] = useState([]);
+  const [showFollowRequests, setShowFollowRequests] = useState(false);
+  const [unreadFollowRequests, setUnreadFollowRequests] = useState(0);
+  const [allUsers, setAllUsers] = useState([]);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [globalSearchTerm, setGlobalSearchTerm] = useState("");
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -30,6 +36,77 @@ function Chat() {
   // Add new state for mobile view
   const [isMobileView, setIsMobileView] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+
+  // Add renderFollowButton function
+  const renderFollowButton = (user) => {
+    // Check if this user is already in our filteredProfiles (meaning we follow them)
+    const isFollowing = profiles.some((profile) => profile.id === user.id);
+
+    // Check if there's a pending request in the followRequests state
+    const hasPendingRequest = followRequests.some(
+      (request) =>
+        request.sender_id === session.user.id && request.receiver_id === user.id
+    );
+
+    const handleFollow = async () => {
+      try {
+        if (isFollowing) {
+          console.log("Already following this user");
+          return;
+        }
+
+        if (hasPendingRequest) {
+          console.log("Request already sent");
+          return;
+        }
+
+        await sendFollowRequest(user.id);
+
+        // Update local state to reflect the pending request
+        setFollowRequests((prev) => [
+          ...prev,
+          {
+            sender_id: session.user.id,
+            receiver_id: user.id,
+            status: "pending",
+          },
+        ]);
+      } catch (error) {
+        console.error("Failed to send follow request:", error);
+      }
+    };
+
+    if (isFollowing) {
+      return (
+        <button
+          disabled
+          className="px-4 py-2 text-sm bg-gray-700 text-gray-400 rounded-lg cursor-not-allowed"
+        >
+          Following
+        </button>
+      );
+    }
+
+    if (hasPendingRequest) {
+      return (
+        <button
+          disabled
+          className="px-4 py-2 text-sm bg-gray-700 text-gray-400 rounded-lg cursor-not-allowed"
+        >
+          Request Sent
+        </button>
+      );
+    }
+
+    return (
+      <button
+        onClick={handleFollow}
+        className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+      >
+        Follow
+      </button>
+    );
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -62,48 +139,42 @@ function Chat() {
   // Conversation management
   async function getOrCreateConversation(user1Id, user2Id) {
     try {
-      // Check if conversation exists
-      const { data: existingConversations, error: fetchError } = await supabase
-        .from("conversation_participants")
-        .select("conversation_id")
-        .in("user_id", [user1Id, user2Id])
-        .order("conversation_id");
+      console.log(
+        `Getting/creating conversation between ${user1Id} and ${user2Id}`
+      );
 
-      if (fetchError) throw fetchError;
-
-      // Group by conversation_id and find one with both users
-      if (existingConversations.length > 0) {
-        const conversationCounts = existingConversations.reduce((acc, curr) => {
-          acc[curr.conversation_id] = (acc[curr.conversation_id] || 0) + 1;
-          return acc;
-        }, {});
-
-        for (const [convId, count] of Object.entries(conversationCounts)) {
-          if (count >= 2) return convId; // Found conversation with both users
-        }
+      // Validate inputs
+      if (!user1Id || !user2Id) {
+        console.error("Invalid user IDs for conversation", {
+          user1Id,
+          user2Id,
+        });
+        return null;
       }
 
-      // Create new conversation if not found
-      const { data: newConversation, error: createError } = await supabase
-        .from("conversations")
-        .insert({})
-        .select();
+      // Use the RPC function to get or create conversation
+      const { data: conversationId, error } = await supabase.rpc(
+        "get_or_create_conversation",
+        {
+          user1_id: user1Id,
+          user2_id: user2Id,
+        }
+      );
 
-      if (createError) throw createError;
+      if (error) {
+        console.error("Error with conversation:", error);
+        return null;
+      }
 
-      // Add participants
-      const { error: participantsError } = await supabase
-        .from("conversation_participants")
-        .insert([
-          { conversation_id: newConversation[0].id, user_id: user1Id },
-          { conversation_id: newConversation[0].id, user_id: user2Id },
-        ]);
+      if (!conversationId) {
+        console.error("No conversation ID returned");
+        return null;
+      }
 
-      if (participantsError) throw participantsError;
-
-      return newConversation[0].id;
+      console.log(`Conversation ID: ${conversationId}`);
+      return conversationId;
     } catch (error) {
-      console.error("Error with conversation:", error);
+      console.error("Exception in getOrCreateConversation:", error);
       return null;
     }
   }
@@ -121,8 +192,271 @@ function Chat() {
       setSession(session);
     });
 
+    // Initialize database
+    setupDatabase();
+
     return () => subscription.unsubscribe();
   }, []);
+
+  // Fetch follow requests
+  const fetchFollowRequests = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("follow_requests")
+        .select("*")
+        .eq("receiver_id", session.user.id)
+        .eq("status", "pending");
+
+      if (error) throw error;
+
+      setFollowRequests(data || []);
+      setUnreadFollowRequests(data?.length || 0);
+    } catch (error) {
+      console.error("Error fetching follow requests:", error);
+    }
+  };
+
+  // Set up real-time updates for follow requests
+  useEffect(() => {
+    if (!session) return;
+
+    const channel = supabase
+      .channel("follow_requests")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "follow_requests",
+          filter: `receiver_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setFollowRequests((prev) => [...prev, payload.new]);
+            setUnreadFollowRequests((prev) => prev + 1);
+          } else if (payload.eventType === "UPDATE") {
+            setFollowRequests((prev) =>
+              prev.map((request) =>
+                request.id === payload.new.id ? payload.new : request
+              )
+            );
+          } else if (payload.eventType === "DELETE") {
+            setFollowRequests((prev) =>
+              prev.filter((request) => request.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
+
+  // Set up user presence
+  const setupPresence = async () => {
+    if (!session) return;
+
+    try {
+      // Set initial presence status
+      const { error: upsertError } = await supabase
+        .from("user_presence")
+        .upsert({
+          user_id: session.user.id,
+          status: "online",
+          last_seen: new Date().toISOString(),
+        });
+
+      if (upsertError) throw upsertError;
+
+      // Set up real-time presence updates
+      const presenceChannel = supabase.channel("presence");
+
+      // Subscribe to presence changes
+      presenceChannel
+        .on("presence", { event: "sync" }, () => {
+          const state = presenceChannel.presenceState();
+          // Update profiles with online status
+          setProfiles((prevProfiles) =>
+            prevProfiles.map((profile) => ({
+              ...profile,
+              status: state[profile.id]?.[0]?.status || "offline",
+            }))
+          );
+        })
+        .subscribe(async (status) => {
+          if (status === "SUBSCRIBED") {
+            await presenceChannel.track({
+              user_id: session.user.id,
+              status: "online",
+              last_seen: new Date().toISOString(),
+            });
+          }
+        });
+
+      // Set up interval to update last_seen
+      const interval = setInterval(async () => {
+        const { error: updateError } = await supabase
+          .from("user_presence")
+          .update({ last_seen: new Date().toISOString() })
+          .eq("user_id", session.user.id);
+
+        if (updateError) console.error("Error updating presence:", updateError);
+      }, 30000); // Update every 30 seconds
+
+      // Cleanup function
+      return () => {
+        clearInterval(interval);
+        presenceChannel.unsubscribe();
+        // Set offline status when leaving
+        supabase
+          .from("user_presence")
+          .update({ status: "offline", last_seen: new Date().toISOString() })
+          .eq("user_id", session.user.id);
+      };
+    } catch (error) {
+      console.error("Error setting up presence:", error);
+    }
+  };
+
+  // Handle follow request response
+  const handleFollowRequestResponse = async (requestId, accepted) => {
+    try {
+      const { error: updateError } = await supabase
+        .from("follow_requests")
+        .update({ status: accepted ? "accepted" : "rejected" })
+        .eq("id", requestId);
+
+      if (updateError) throw updateError;
+
+      if (accepted) {
+        // Create relationship if accepted
+        const { error: relationshipError } = await supabase
+          .from("user_relationships")
+          .insert({
+            user_id: session.user.id,
+            following_id: followRequests.find((r) => r.id === requestId)
+              ?.sender_id,
+          });
+
+        if (relationshipError) throw relationshipError;
+      }
+
+      // Update local state
+      setFollowRequests((prev) => prev.filter((r) => r.id !== requestId));
+      setUnreadFollowRequests((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error("Error handling follow request:", error);
+    }
+  };
+
+  // Send follow request
+  const sendFollowRequest = async (receiverId) => {
+    try {
+      // First check if a relationship already exists (they're already following)
+      // Use count instead of select to avoid 406 errors
+      const { count, error: relationshipError } = await supabase
+        .from("user_relationships")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", session.user.id)
+        .eq("following_id", receiverId);
+
+      if (relationshipError) {
+        console.error("Error checking relationship:", relationshipError);
+      }
+
+      // If already following, no need to send a request
+      if (count && count > 0) {
+        console.log("Already following this user");
+        return;
+      }
+
+      // Check if a follow request already exists
+      // Use count instead of select to avoid 406 errors
+      const { count: requestCount, error: checkError } = await supabase
+        .from("follow_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("sender_id", session.user.id)
+        .eq("receiver_id", receiverId)
+        .eq("status", "pending");
+
+      if (checkError) {
+        console.error(
+          "Error checking for existing follow request:",
+          checkError
+        );
+        throw checkError;
+      }
+
+      if (requestCount && requestCount > 0) {
+        console.log("Follow request already exists");
+        return; // Request already exists, do nothing
+      }
+
+      // Check for rejected requests that could be updated
+      const { data: rejectedRequest, error: rejectedError } = await supabase
+        .from("follow_requests")
+        .select("id")
+        .eq("sender_id", session.user.id)
+        .eq("receiver_id", receiverId)
+        .eq("status", "rejected")
+        .maybeSingle();
+
+      if (rejectedError && rejectedError.code !== "PGRST116") {
+        console.error(
+          "Error checking for rejected follow request:",
+          rejectedError
+        );
+      }
+
+      if (rejectedRequest) {
+        console.log("Updating rejected request to pending");
+        const { error: updateError } = await supabase
+          .from("follow_requests")
+          .update({ status: "pending" })
+          .eq("id", rejectedRequest.id);
+
+        if (updateError) {
+          console.error("Error updating follow request:", updateError);
+          throw updateError;
+        }
+
+        console.log("Updated existing follow request to pending");
+        return;
+      }
+
+      console.log("Creating new follow request");
+      // Create new request if none exists
+      const { error: insertError } = await supabase
+        .from("follow_requests")
+        .insert({
+          sender_id: session.user.id,
+          receiver_id: receiverId,
+          status: "pending",
+        });
+
+      if (insertError) {
+        console.error("Error creating follow request:", insertError);
+        throw insertError;
+      }
+
+      console.log("Follow request sent successfully");
+    } catch (error) {
+      console.error("Error sending follow request:", error);
+      // Don't rethrow the error to prevent UI disruption
+    }
+  };
+
+  // Handle session changes
+  useEffect(() => {
+    if (session) {
+      setupDatabase(); // Initialize database tables
+      fetchProfiles();
+      fetchFollowRequests();
+      setupPresence();
+    }
+  }, [session]);
 
   useEffect(() => {
     if (session) {
@@ -133,18 +467,93 @@ function Chat() {
   // Fetch all user profiles except current user
   async function fetchProfiles() {
     try {
+      if (!session || !session.user) {
+        console.log("No session, can't fetch profiles");
+        return;
+      }
+
+      console.log("Fetching relationships for user:", session.user.id);
+
+      // First get the list of users that the current user follows
+      const { data: relationships, error: relationshipsError } = await supabase
+        .from("user_relationships")
+        .select("following_id")
+        .eq("user_id", session.user.id);
+
+      if (relationshipsError) {
+        console.error("Error fetching relationships:", relationshipsError);
+        // Continue with empty relationships if there's an error
+        setProfiles([]);
+        return;
+      }
+
+      // Extract the IDs of followed users, safely handling null/undefined
+      const followedUserIds = relationships
+        ? relationships.map((rel) => rel.following_id).filter(Boolean)
+        : [];
+
+      // If the user doesn't follow anyone yet, return empty profiles
+      if (followedUserIds.length === 0) {
+        console.log("User doesn't follow anyone yet");
+        setProfiles([]);
+        return;
+      }
+
+      // Then fetch only the profiles of followed users
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .in("id", followedUserIds);
+
+      if (error) {
+        console.error("Error fetching followed profiles:", error);
+        setProfiles([]);
+        return;
+      }
+
+      console.log(`Fetched ${data?.length || 0} followed user profiles`);
+      setProfiles(data || []);
+    } catch (error) {
+      console.error("Error in fetchProfiles:", error);
+      setProfiles([]);
+    }
+  }
+
+  // Fetch all users for global search
+  async function fetchAllUsers() {
+    try {
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .neq("id", session.user.id);
 
       if (error) throw error;
-
-      setProfiles(data || []);
+      setAllUsers(data || []);
     } catch (error) {
-      console.error("Error fetching profiles:", error);
+      console.error("Error fetching all users:", error);
     }
   }
+
+  // Filter users based on search term
+  const filteredAllUsers = allUsers.filter(
+    (user) =>
+      user.username?.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
+      user.full_name?.toLowerCase().includes(globalSearchTerm.toLowerCase())
+  );
+
+  // Filter followed users based on search term
+  const filteredProfiles = profiles.filter(
+    (profile) =>
+      profile.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      profile.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Fetch all users when session changes
+  useEffect(() => {
+    if (session) {
+      fetchAllUsers();
+    }
+  }, [session]);
 
   function formatTime(timestamp) {
     return new Date(timestamp).toLocaleTimeString([], {
@@ -170,7 +579,13 @@ function Chat() {
     channelRef.current = channel;
 
     const pollMessages = async () => {
+      if (!pollMessages.retryCount) {
+        pollMessages.retryCount = 0;
+      }
+
       try {
+        if (!session || !selectedUser) return;
+
         const conversationId = await getOrCreateConversation(
           session.user.id,
           selectedUser.id
@@ -178,14 +593,26 @@ function Chat() {
 
         if (!conversationId) {
           console.error("Failed to get or create conversation");
+
+          // Implement exponential backoff
+          pollMessages.retryCount++;
+          if (pollMessages.retryCount > 5) {
+            console.warn(
+              "Too many failed attempts to get conversation, giving up"
+            );
+            return;
+          }
+
           return;
         }
 
-        const { data, error } = await supabase
-          .from("messages")
-          .select("*")
-          .eq("conversation_id", conversationId)
-          .order("created_at", { ascending: true });
+        // Reset retry count on success
+        pollMessages.retryCount = 0;
+
+        // Use RPC function to get messages
+        const { data, error } = await supabase.rpc("get_messages", {
+          conversation_id_param: conversationId,
+        });
 
         if (error) throw error;
 
@@ -221,6 +648,13 @@ function Chat() {
         });
       } catch (error) {
         console.error("Error polling messages:", error);
+
+        // Implement exponential backoff
+        pollMessages.retryCount = (pollMessages.retryCount || 0) + 1;
+        if (pollMessages.retryCount > 5) {
+          console.warn("Too many polling errors, giving up");
+          return;
+        }
       }
     };
 
@@ -324,12 +758,10 @@ function Chat() {
           return;
         }
 
-        // Fetch messages for this conversation
-        const { data, error } = await supabase
-          .from("messages")
-          .select("*")
-          .eq("conversation_id", conversationId)
-          .order("created_at", { ascending: true });
+        // Fetch messages using RPC function
+        const { data, error } = await supabase.rpc("get_messages", {
+          conversation_id_param: conversationId,
+        });
 
         if (error) throw error;
 
@@ -613,22 +1045,18 @@ function Chat() {
       setFilePreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
 
-      // Database
-      const { data, error } = await supabase
-        .from("messages")
-        .insert({
-          sender_id: session.user.id,
-          receiver_id: selectedUser.id,
-          conversation_id: conversationId,
-          content: messageContent,
-        })
-        .select()
-        .single();
+      // Use RPC function to insert message
+      const { data, error } = await supabase.rpc("insert_message", {
+        sender_id_param: session.user.id,
+        receiver_id_param: selectedUser.id,
+        conversation_id_param: conversationId,
+        content_param: messageContent,
+      });
 
       if (error) throw error;
 
       if (data) {
-        const returnedMsg = { ...data };
+        const returnedMsg = { ...data[0] }; // Access the first element of the returned array
         if (
           returnedMsg.content &&
           returnedMsg.content.includes("[ATTACHMENT]")
@@ -666,11 +1094,6 @@ function Chat() {
     }
   }
 
-  // Handle login for test account
-  function handleLogin() {
-    // Test account login implementation would go here
-  }
-
   // Add theme object
   const theme = {
     message: {
@@ -678,6 +1101,108 @@ function Chat() {
       received: "bg-gray-800 text-gray-100",
     },
   };
+
+  // Add global search UI
+  const renderGlobalSearch = () => (
+    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-2xl px-4">
+      <div className="relative">
+        <input
+          type="text"
+          placeholder="Search all users..."
+          value={globalSearchTerm}
+          onChange={(e) => setGlobalSearchTerm(e.target.value)}
+          onFocus={() => setShowGlobalSearch(true)}
+          className="w-full bg-gray-800 text-white px-4 py-2 rounded-lg pl-10 focus:outline-none focus:ring-1 focus:ring-gray-600"
+        />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-5 w-5 text-gray-400 absolute left-3 top-2.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
+      </div>
+      {showGlobalSearch && globalSearchTerm && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 rounded-lg shadow-lg max-h-96 overflow-y-auto">
+          {filteredAllUsers.length === 0 ? (
+            <div className="p-4 text-gray-400">No users found</div>
+          ) : (
+            <div className="divide-y divide-gray-700">
+              {filteredAllUsers.map((user, index) => (
+                <div
+                  key={`global-user-${user.id}-${index}`}
+                  className="p-4 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
+                >
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 rounded-full bg-gray-700 mr-3 overflow-hidden">
+                      {user.avatar_url ? (
+                        <img
+                          src={user.avatar_url}
+                          alt={user.username || user.full_name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-sm font-medium text-gray-300">
+                          {(user.username || user.full_name || "U")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-white font-medium">
+                        {user.username || user.full_name || "Anonymous User"}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {user.status === "online" ? "Online" : "Offline"}
+                      </div>
+                    </div>
+                  </div>
+                  {renderFollowButton(user)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // Modify the sidebar search
+  const renderSidebarSearch = () => (
+    <div className="p-4 border-b border-gray-700">
+      <div className="relative">
+        <input
+          type="text"
+          placeholder="Search followed users..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full bg-gray-700 text-gray-100 px-4 py-2 rounded-lg pl-10 focus:outline-none focus:ring-1 focus:ring-gray-600"
+        />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-5 w-5 text-gray-400 absolute left-3 top-2.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -708,6 +1233,7 @@ function Chat() {
 
   return (
     <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_40%,_#000000_80%)] h-screen w-screen overflow-hidden">
+      {renderGlobalSearch()}
       <div className="flex h-full text-gray-100 relative backdrop-blur-3xl">
         {/* Mobile Header */}
         {isMobileView && selectedUser && (
@@ -753,9 +1279,6 @@ function Chat() {
                     selectedUser.full_name ||
                     "Anonymous User"}
                 </div>
-                {/* <div className="text-xs text-gray-400">
-                  {selectedUser.status === "online" ? "Online" : "Offline"}
-                </div> */}
               </div>
             </div>
           </div>
@@ -792,7 +1315,7 @@ function Chat() {
                   {session?.user?.user_metadata?.full_name ||
                     session?.user?.email}
                 </div>
-                <div className="text-sm text-gray-400">Online</div>
+                <div className="text-sm text-gray-400"></div>
               </div>
               {isMobileView && (
                 <button
@@ -837,38 +1360,13 @@ function Chat() {
             </div>
           </div>
 
-          {/* Search */}
-          <div className="p-4 border-b border-gray-700">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search conversations..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-gray-700 text-gray-100 px-4 py-2 rounded-lg pl-10 focus:outline-none focus:ring-1 focus:ring-gray-600"
-              />
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 text-gray-400 absolute left-3 top-2.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-          </div>
+          {renderSidebarSearch()}
 
           {/* Conversations List */}
           <div className="flex-grow overflow-y-auto">
-            {profiles.map((profile) => (
+            {filteredProfiles.map((profile, index) => (
               <div
-                key={profile.id}
+                key={`profile-${profile.id}-${index}`}
                 className={`p-4 flex items-center cursor-pointer transition-colors ${
                   selectedUser?.id === profile.id
                     ? "bg-gray-700/50"
@@ -900,12 +1398,9 @@ function Chat() {
                   <div className="font-medium text-white">
                     {profile.username || profile.full_name || "Anonymous User"}
                   </div>
-                  {/* <div className="text-sm text-gray-400">
+                  <div className="text-sm text-gray-400">
                     {profile.status === "online" ? "Online" : "Offline"}
-                  </div> */}
-                  <h1 className="text-xm text-gray-500">
-                    Select to start conversation
-                  </h1>
+                  </div>
                 </div>
               </div>
             ))}
@@ -913,7 +1408,11 @@ function Chat() {
         </div>
 
         {/* Main Chat Area */}
-        <div className={`flex-1 flex flex-col ${isMobileView ? "w-full" : ""} md: mt-18`}>
+        <div
+          className={`flex-1 flex flex-col ${
+            isMobileView ? "w-full" : ""
+          } md: mt-18`}
+        >
           {selectedUser ? (
             <>
               {!isMobileView && (
@@ -948,10 +1447,10 @@ function Chat() {
                         {selectedUser.status === "online" ? (
                           <span className="flex items-center">
                             <span className="w-2 h-2 rounded-full bg-green-500 mr-1"></span>
-                            Online
+                            ""
                           </span>
                         ) : (
-                          "Offline"
+                          ""
                         )}
                       </div>
                     </div>
@@ -970,7 +1469,7 @@ function Chat() {
                   const isMyMessage = message.sender_id === session.user.id;
                   return (
                     <div
-                      key={message.id}
+                      key={`message-${message.id}-${index}`}
                       className={`flex ${
                         isMyMessage ? "justify-end" : "justify-start"
                       }`}

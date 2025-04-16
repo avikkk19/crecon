@@ -721,9 +721,9 @@ function Blog() {
                   </button>
                 </div>
               ) : (
-                blogs.map((blog) => (
+                blogs.map((blog, index) => (
                   <div
-                    key={blog.id}
+                    key={`blog-${blog.id}-${index}`}
                     className="bg-gray-800 rounded-lg overflow-hidden shadow-lg border border-gray-700 flex flex-col hover:border-gray-900 transition-colors duration-200"
                   >
                     {/* Blog card image */}
