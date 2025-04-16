@@ -340,477 +340,309 @@ function Blog() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-300">
-        Loading...
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-900">
-        <div className="text-center text-gray-300">
-          <h1 className="text-2xl font-bold mb-4">
-            Please sign in to view and create blogs
-          </h1>
-          <button
-            onClick={handleLogin}
-            className="bg-black hover:bg-zinc-700 text-white px-4 py-2 rounded"
-          >
-            Sign In (Test Account)
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_100%,_#000000_100%)]">
-      <div className="min-h-screen text-gray-300">
-        {/* Header */}
-        <header className="bg-transparent backdrop-blur-lg shadow-md p-4 border-b border-gray-700">
-          <div className="max-w-6xl mx-auto flex justify-between items-center mt-20">
-            <h1 className="text-2xl font-bold text-white">Community Blog</h1>
-            <div className="flex items-center space-x-4 ">
-              <p className="text-[0.6rem]">
-                Logged in as: {session.user.email}
-              </p>
-              <a
-                href="/chat"
-                className="text-white hover:text-zinc-300 text-xs bg-black rounded-4xl p-2 flex justify-center items-center w-auto "
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_center,_#0f172a_0%,_#042f2e_0%,_#000000_80%)] text-white p-4 md:p-6">
+      <div className="max-w-5xl mx-auto">
+        {/* If no session, show login button */}
+        {!session ? (
+          <div className="flex flex-col items-center justify-center h-[70vh] bg-gray-800/30 backdrop-blur-sm rounded-2xl p-10 text-center">
+            <h1 className="text-3xl font-bold mb-4">Welcome to Crecon Blogs</h1>
+            <p className="mb-8 text-gray-300">
+              Sign in to read and create blog posts
+            </p>
+            <button
+              onClick={handleLogin}
+              className="px-6 py-3 bg-gradient-to-bl from-green-900 to-blue-900 rounded-lg shadow-lg hover:opacity-90 transition-opacity"
+            >
+              Sign In
+            </button>
+          </div>
+        ) : loading ? (
+          <div className="flex justify-center items-center h-[70vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+          </div>
+        ) : selectedBlog ? (
+          /* Blog Detail View */
+          <div className="bg-gray-800/40 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+            <button
+              onClick={() => setSelectedBlog(null)}
+              className="text-gray-400 hover:text-white mb-4 flex items-center"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 mr-1"
+                viewBox="0 0 20 20"
+                fill="currentColor"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 mr-2 text-white"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                  stroke="white"
-                >
-                  <path
-                    d="M19 12H5M12 5l-7 7 7 7"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                chat
-              </a>
+                <path
+                  fillRule="evenodd"
+                  d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Back to blogs
+            </button>
+
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold mb-2">{selectedBlog.title}</h1>
+              <div className="flex justify-between items-center text-gray-400 mb-4">
+                <div className="flex items-center">
+                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center mr-2">
+                    {profiles[selectedBlog.author_id]?.username?.charAt(0) ||
+                      "U"}
+                  </div>
+                  <span>
+                    {profiles[selectedBlog.author_id]?.username || "Anonymous"}{" "}
+                    • {formatDate(selectedBlog.created_at)}
+                  </span>
+                </div>
+                {session.user.id !== selectedBlog.author_id && (
+                  <button
+                    onClick={() =>
+                      startChatWithAuthor(selectedBlog, selectedBlog.author_id)
+                    }
+                    className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                  >
+                    Chat with Author
+                  </button>
+                )}
+              </div>
+              {selectedBlog.image_url && (
+                <img
+                  src={selectedBlog.image_url}
+                  alt={selectedBlog.title}
+                  className="w-full h-64 object-cover rounded-lg mb-6"
+                />
+              )}
+              <div className="text-lg text-gray-300 mb-6">
+                {selectedBlog.summary}
+              </div>
+              <div className="prose prose-invert max-w-none">
+                {selectedBlog.content.split("\n").map((paragraph, index) => (
+                  <p key={index} className="mb-4">
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
             </div>
           </div>
-        </header>
-
-        {/* Main content */}
-        <main className="max-w-6xl mx-auto p-4">
-          {/* Create blog button */}
-          {!creating && !selectedBlog && (
-            <div className="mb-6 flex justify-end">
+        ) : creating ? (
+          /* New Blog Form */
+          <div className="bg-gray-800/40 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold">Create New Blog Post</h2>
               <button
-                onClick={() => setCreating(true)}
-                className="bg-zinc-900 hover:bg-gray-800 hover:text-white text-white px-4 py-2 rounded-lg w-full sm:w-auto"
-              >
-                Create New Blog Post
-              </button>
-            </div>
-          )}
-
-          {/* Back button when viewing a single blog */}
-          {selectedBlog && (
-            <div className="mb-6">
-              <button
-                onClick={() => setSelectedBlog(null)}
-                className="flex items-center text-white hover:text-zinc-300 w-full sm:w-auto justify-center sm:justify-start"
+                onClick={() => setCreating(false)}
+                className="text-gray-400 hover:text-white"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 mr-1"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitBlog}>
+              <div className="mb-4">
+                <label className="block text-gray-300 mb-2">Title</label>
+                <input
+                  type="text"
+                  name="title"
+                  value={newBlog.title}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                  placeholder="Enter blog title"
+                  required
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-gray-300 mb-2">
+                  Summary (optional)
+                </label>
+                <input
+                  type="text"
+                  name="summary"
+                  value={newBlog.summary}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                  placeholder="Brief summary of your blog"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-gray-300 mb-2">Content</label>
+                <textarea
+                  name="content"
+                  value={newBlog.content}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-2 text-white h-64"
+                  placeholder="Write your blog post here..."
+                  required
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-gray-300 mb-2">
+                  Featured Image (optional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={imageInputRef}
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current.click()}
+                    className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+                    disabled={uploading}
+                  >
+                    Select Image
+                  </button>
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={cancelImageUpload}
+                      className="ml-4 text-red-400 hover:text-red-300"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                {uploadError && (
+                  <p className="text-red-400 mt-2 text-sm">{uploadError}</p>
+                )}
+                {imagePreview && (
+                  <div className="mt-4">
+                    <img
+                      src={imagePreview.url}
+                      alt="Preview"
+                      className="w-full max-h-60 object-cover rounded-lg"
+                    />
+                    <p className="text-gray-400 mt-1 text-sm">
+                      {imagePreview.name}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setCreating(false)}
+                  className="px-4 py-2 bg-gray-700 text-white rounded-lg mr-4 hover:bg-gray-600"
+                  disabled={uploading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-gradient-to-bl from-green-900 to-blue-900 text-white rounded-lg hover:opacity-90"
+                  disabled={uploading}
+                >
+                  {uploading ? "Uploading..." : "Publish Blog"}
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          /* Blog List View */
+          <div>
+            <div className="flex justify-between items-center mb-8">
+              <h1 className="text-3xl font-bold">Blog Posts</h1>
+              <button
+                onClick={() => setCreating(true)}
+                className="px-4 py-2 bg-gradient-to-bl from-green-900 to-blue-900 text-white rounded-lg hover:opacity-90 transition-opacity flex items-center"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 mr-2"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
                   <path
                     fillRule="evenodd"
-                    d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
+                    d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
                     clipRule="evenodd"
                   />
                 </svg>
-                Back to All Posts
+                New Post
               </button>
             </div>
-          )}
 
-          {/* Blog creation form */}
-          {creating && (
-            <div className="mb-8 bg-black rounded-lg p-4 sm:p-6 shadow-lg border border-gray-700">
-              <h2 className="text-xl font-bold text-white mb-4">
-                Create New Blog Post
-              </h2>
-
-              {/* Show upload error if any */}
-              {uploadError && (
-                <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-300">
-                  <p className="flex items-center">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 mr-2"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    {uploadError}
-                  </p>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmitBlog}>
-                <div className="mb-4">
-                  <label className="block text-gray-300 mb-2">
-                    Title <span className="text-sm">(required)</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="title"
-                    value={newBlog.title}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full rounded-lg border border-gray-700 bg-gray-700 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-zinc-500 text-white"
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-gray-300 mb-2">
-                    Summary (optional)
-                  </label>
-                  <input
-                    type="text"
-                    name="summary"
-                    value={newBlog.summary}
-                    onChange={handleInputChange}
-                    className="w-full rounded-lg border `border-gray-700 bg-gray-700 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-zinc-500 text-white"
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-gray-300 mb-2">
-                    Content <span className="text-sm">(required)</span>
-                  </label>
-                  <textarea
-                    name="content"
-                    value={newBlog.content}
-                    onChange={handleInputChange}
-                    required
-                    rows="6"
-                    className="w-full rounded-lg border border-gray-700 bg-gray-700 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-zinc-500 text-white"
-                  ></textarea>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-gray-300 mb-2">
-                    Featured Image (optional)
-                  </label>
-
-                  {imagePreview ? (
-                    <div className="mb-2 p-2 bg-black rounded flex items-center justify-between">
-                      <div className="flex items-center">
-                        <img
-                          src={imagePreview.url}
-                          alt="Preview"
-                          className="h-16 w-16 object-cover rounded mr-2"
-                        />
-                        <span
-                          className="text-gray-300 truncate"
-                          style={{ maxWidth: "200px" }}
-                        >
-                          {imagePreview.name}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={cancelImageUpload}
-                        className="text-gray-400 hover:text-gray-300"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          imageInputRef.current && imageInputRef.current.click()
-                        }
-                        className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2 rounded-lg flex items-center w-full sm:w-auto justify-center"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5 mr-2"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                          />
-                        </svg>
-                        Upload Image
-                      </button>
-                      <input
-                        type="file"
-                        ref={imageInputRef}
-                        onChange={handleImageSelect}
-                        accept="image/*"
-                        className="hidden"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCreating(false);
-                      setNewBlog({ title: "", summary: "", content: "" });
-                      setImagePreview(null);
-                      setUploadError(null);
-                      if (imageInputRef.current)
-                        imageInputRef.current.value = "";
-                    }}
-                    className="bg-gray-600 hover:bg-gray-600 text-white px-4 py-2 rounded-lg w-full sm:w-auto"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={
-                      uploading ||
-                      !newBlog.title.trim() ||
-                      !newBlog.content.trim()
-                    }
-                    className="bg-white hover:bg-zinc-700 text-black px-6 py-2 rounded-lg disabled:opacity-50 w-full sm:w-auto"
-                  >
-                    {uploading || creating ? "Submit Blog" : "Publish"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* Blog detail view */}
-          {selectedBlog && (
-            <div className="bg-black rounded-lg shadow-lg overflow-hidden border border-zinc-700">
-              {/* Cover image */}
-              {selectedBlog.image_url && (
-                <div className="w-full h-48 sm:h-64 md:h-96 overflow-hidden">
-                  <img
-                    src={selectedBlog.image_url}
-                    alt={selectedBlog.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-
-              <div className="p-4 sm:p-6">
-                {/* Title and metadata */}
-                <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">
-                  {selectedBlog.title}
-                </h1>
-
-                <div className="flex flex-col sm:flex-row items-start sm:items-center mb-6 text-gray-400">
-                  <div className="flex items-center mb-2 sm:mb-0">
-                    {profiles[selectedBlog.author_id] && (
-                      <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white mr-3">
-                        {profiles[selectedBlog.author_id].avatar_url ? (
-                          <img
-                            src={profiles[selectedBlog.author_id].avatar_url}
-                            alt={profiles[selectedBlog.author_id].username}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          (profiles[selectedBlog.author_id].username || "A")
-                            .charAt(0)
-                            .toUpperCase()
-                        )}
-                      </div>
-                    )}
-                    <div>
-                      <div className="font-medium text-gray-300">
-                        {profiles[selectedBlog.author_id]?.username ||
-                          "Anonymous"}
-                      </div>
-                      <div className="text-sm">
-                        {formatDate(selectedBlog.created_at)}
-                      </div>
-                    </div>
-                  </div>
-                  {selectedBlog.author_id !== session.user.id && (
-                    <button
-                      onClick={() =>
-                        startChatWithAuthor(
-                          selectedBlog,
-                          selectedBlog.author_id
-                        )
-                      }
-                      className="ml-auto bg-dark hover:bg-zinc-700 text-white px-4 py-2 rounded-lg flex items-center w-full sm:w-auto justify-center mt-2 sm:mt-0"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                      </svg>
-                      Chat with Author
-                    </button>
-                  )}
-                </div>
-
-                {/* Content */}
-                <div className="prose prose-invert max-w-none">
-                  {selectedBlog.summary && (
-                    <p className="text-gray-400 italic text-lg mb-6">
-                      {selectedBlog.summary}
-                    </p>
-                  )}
-
-                  <div className="whitespace-pre-line text-gray-300">
-                    {selectedBlog.content}
-                  </div>
-                </div>
+            {blogs.length === 0 ? (
+              <div className="bg-gray-800/40 backdrop-blur-sm rounded-xl p-10 text-center border border-gray-700/50">
+                <h2 className="text-xl font-medium mb-4">No blogs yet</h2>
+                <p className="text-gray-400 mb-6">
+                  Be the first to create a blog post!
+                </p>
+                <button
+                  onClick={() => setCreating(true)}
+                  className="px-4 py-2 bg-gradient-to-bl from-green-900 to-blue-900 text-white rounded-lg hover:opacity-90 transition-opacity"
+                >
+                  Create New Blog
+                </button>
               </div>
-            </div>
-          )}
-
-          {/* Blog grid */}
-          {!selectedBlog && !creating && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {blogs.length === 0 ? (
-                <div className="col-span-full text-center py-12">
-                  <p className="text-gray-400 mb-4">No blog posts yet</p>
-                  <button
-                    onClick={() => setCreating(true)}
-                    className="bg-black hover:bg-zinc-700 text-white px-4 py-2 rounded-lg"
-                  >
-                    Create the first post
-                  </button>
-                </div>
-              ) : (
-                blogs.map((blog, index) => (
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {blogs.map((blog) => (
                   <div
-                    key={`blog-${blog.id}-${index}`}
-                    className="bg-gray-800 rounded-lg overflow-hidden shadow-lg border border-gray-700 flex flex-col hover:border-gray-900 transition-colors duration-200"
+                    key={blog.id}
+                    className="bg-gray-800/40 backdrop-blur-sm rounded-xl overflow-hidden border border-gray-700/50 transition-transform hover:transform hover:scale-[1.02] cursor-pointer"
+                    onClick={() => openBlogDetail(blog)}
                   >
-                    {/* Blog card image */}
-                    <div
-                      className="h-48 overflow-hidden relative cursor-pointer"
-                      onClick={() => openBlogDetail(blog)}
-                    >
-                      {blog.image_url ? (
+                    {blog.image_url ? (
+                      <div className="h-48 overflow-hidden">
                         <img
                           src={blog.image_url}
                           alt={blog.title}
-                          className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                          className="w-full h-full object-cover"
                         />
-                      ) : (
-                        <div className="w-full h-full bg-gray-700 flex items-center justify-center">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-12 w-12 text-gray-500"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Card content */}
-                    <div className="p-4 flex-1 flex flex-col">
-                      <h2
-                        className="text-xl font-bold text-white mb-2 cursor-pointer hover:text-zinc-400"
-                        onClick={() => openBlogDetail(blog)}
-                      >
+                      </div>
+                    ) : (
+                      <div className="h-48 bg-gray-700/50 flex items-center justify-center">
+                        <span className="text-gray-400">No image</span>
+                      </div>
+                    )}
+                    <div className="p-4">
+                      <h3 className="text-xl font-semibold mb-2 line-clamp-2">
                         {blog.title}
-                      </h2>
-
-                      {blog.summary && (
-                        <p className="text-gray-400 mb-3 line-clamp-2">
-                          {blog.summary}
-                        </p>
-                      )}
-
-                      <p className="text-gray-300 mb-4 line-clamp-3">
-                        {blog.content}
+                      </h3>
+                      <p className="text-gray-400 text-sm mb-3 line-clamp-3">
+                        {blog.summary || blog.content.substring(0, 100) + "..."}
                       </p>
-
-                      <div className="mt-auto pt-4 flex items-center justify-between border-t border-gray-700">
+                      <div className="flex justify-between items-center text-sm text-gray-500">
                         <div className="flex items-center">
-                          <div className="w-8 h-8 bg-zinc-600 rounded-full flex items-center justify-center text-white mr-2">
-                            {profiles[blog.author_id]?.avatar_url ? (
-                              <img
-                                src={profiles[blog.author_id].avatar_url}
-                                alt={profiles[blog.author_id].username}
-                                className="w-8 h-8 rounded-full object-cover"
-                              />
-                            ) : (
-                              (profiles[blog.author_id]?.username || "A")
-                                .charAt(0)
-                                .toUpperCase()
-                            )}
+                          <div className="h-6 w-6 rounded-full bg-blue-600 flex items-center justify-center mr-2 text-white text-xs">
+                            {profiles[blog.author_id]?.username?.charAt(0) ||
+                              "U"}
                           </div>
-                          <div className="text-sm text-gray-400">
+                          <span>
                             {profiles[blog.author_id]?.username || "Anonymous"}
-                          </div>
+                          </span>
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {formatDate(blog.created_at)}
-                        </div>
+                        <span>{formatDate(blog.created_at)}</span>
                       </div>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          )}
-        </main>
-
-        {/* Footer */}
-        <footer className="bg-transparent py-6 text-center text-gray-500 text-sm mt-12">
-          <p>&copy; {new Date().getFullYear()} Community Blog Platform</p>
-        </footer>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

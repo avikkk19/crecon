@@ -14,68 +14,104 @@ import Tandc from "./components/pages/Tandc.jsx";
 import Privacy from "./components/pages/Privacy.jsx";
 import Security from "./components/pages/Security.jsx";
 import Abtdev from "./components/pages/Abtdev.jsx";
+import Portfolio from "./components/pages/Portfolio.jsx";
+import Notifications from "./components/Notifications.jsx";
+import Profile from "./components/Profile.jsx";
 
 const App = () => {
   return (
     <AuthProvider>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<HeroSection />} />
+      <div className="flex">
+        <Navbar />
+        <div className="min-h-screen w-full pl-0 md:pl-[216px] pb-24 md:pb-0">
+          <Routes>
+            <Route path="/" element={<HeroSection />} />
+            <Route path="/portfolio" element={<Portfolio />} />
 
-        {/* Auth routes - redirect if already logged in */}
-        <Route
-          path="/signin"
-          element={
-            <AuthRoute>
-              <SignInForm />
-            </AuthRoute>
-          }
-        />
+            {/* Auth routes - redirect if already logged in */}
+            <Route
+              path="/signin"
+              element={
+                <AuthRoute>
+                  <SignInForm />
+                </AuthRoute>
+              }
+            />
 
-        <Route
-          path="/signup"
-          element={
-            <AuthRoute>
-              <SignupForm />
-            </AuthRoute>
-          }
-        />
-        {/* Public routes */}
-        <Route path="/tandc" element={<Tandc />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/security" element={<Security />} />
-        <Route path="/abtdev" element={<Abtdev />} />
+            <Route
+              path="/signup"
+              element={
+                <AuthRoute>
+                  <SignupForm />
+                </AuthRoute>
+              }
+            />
+            {/* Public routes */}
+            <Route path="/tandc" element={<Tandc />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/security" element={<Security />} />
+            <Route path="/abtdev" element={<Abtdev />} />
 
-        {/* Protected routes - require authentication */}
-        <Route
-          path="/chat"
-          element={
-            <ProtectedRoute>
-              <ModernChatInterface />
-            </ProtectedRoute>
-          }
-        />
+            {/* Protected routes - require authentication */}
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <ModernChatInterface />
+                </ProtectedRoute>
+              }
+            />
 
-        {/* Add this new route with userId parameter */}
-        <Route
-          path="/chat/:userId"
-          element={
-            <ProtectedRoute>
-              <ModernChatInterface />
-            </ProtectedRoute>
-          }
-        />
+            {/* Add this new route with userId parameter */}
+            <Route
+              path="/chat/:userId"
+              element={
+                <ProtectedRoute>
+                  <ModernChatInterface />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route
-          path="/blog"
-          element={
-            <ProtectedRoute>
-              <Blog />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-      <Footer />
+            <Route
+              path="/blog"
+              element={
+                <ProtectedRoute>
+                  <Blog />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/notifications"
+              element={
+                <ProtectedRoute>
+                  <Notifications />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Profile routes */}
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/profile/:userId"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+          <Footer />
+        </div>
+      </div>
     </AuthProvider>
   );
 };

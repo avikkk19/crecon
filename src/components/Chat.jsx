@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, setupDatabase } from "./SupabaseClient.jsx";
+import { useNavigate } from "react-router-dom";
+import FriendsList from "./FriendsList";
+import { useUser } from "../context/UserContext";
 
 // Constants
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
@@ -7,16 +10,33 @@ const BUCKET_NAME = "chat-media";
 
 // Part 1: Core Chat Component and State Management
 function Chat() {
+  const { user, isLoading } = useUser();
+  const navigate = useNavigate();
+  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [friends, setFriends] = useState([]);
+  const [selectedChat, setSelectedChat] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+  const fileInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const messageContainerRef = useRef(null);
+  const dropdownRef = useRef(null);
+  const updateIntervalRef = useRef(null);
+  const channelRef = useRef(null);
+
   // State management
   const [session, setSession] = useState(null);
   const [profiles, setProfiles] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [filePreview, setFilePreview] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [followRequests, setFollowRequests] = useState([]);
   const [showFollowRequests, setShowFollowRequests] = useState(false);
@@ -24,14 +44,7 @@ function Chat() {
   const [allUsers, setAllUsers] = useState([]);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [globalSearchTerm, setGlobalSearchTerm] = useState("");
-
-  // Refs
-  const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const channelRef = useRef(null);
-  const updateIntervalRef = useRef(null);
-  const chatContainerRef = useRef(null);
-  const dropdownRef = useRef(null);
+  const [chatContainerRef, setChatContainerRef] = useState(null);
 
   // Add new state for mobile view
   const [isMobileView, setIsMobileView] = useState(false);
@@ -139,9 +152,9 @@ function Chat() {
   // Conversation management
   async function getOrCreateConversation(user1Id, user2Id) {
     try {
-      console.log(
-        `Getting/creating conversation between ${user1Id} and ${user2Id}`
-      );
+      // console.log(
+      //   `Getting/creating conversation between ${user1Id} and ${user2Id}`
+      // );
 
       // Validate inputs
       if (!user1Id || !user2Id) {
@@ -171,7 +184,7 @@ function Chat() {
         return null;
       }
 
-      console.log(`Conversation ID: ${conversationId}`);
+      // console.log(`Conversation ID: ${conversationId}`);
       return conversationId;
     } catch (error) {
       console.error("Exception in getOrCreateConversation:", error);
@@ -444,7 +457,6 @@ function Chat() {
       console.log("Follow request sent successfully");
     } catch (error) {
       console.error("Error sending follow request:", error);
-      // Don't rethrow the error to prevent UI disruption
     }
   };
 
@@ -474,7 +486,6 @@ function Chat() {
 
       console.log("Fetching relationships for user:", session.user.id);
 
-      // First get the list of users that the current user follows
       const { data: relationships, error: relationshipsError } = await supabase
         .from("user_relationships")
         .select("following_id")
@@ -482,24 +493,28 @@ function Chat() {
 
       if (relationshipsError) {
         console.error("Error fetching relationships:", relationshipsError);
-        // Continue with empty relationships if there's an error
         setProfiles([]);
+        setFriends([]);
+
+        // Make sure we load all users anyway so they can be searched
+        fetchAllUsers();
         return;
       }
 
-      // Extract the IDs of followed users, safely handling null/undefined
       const followedUserIds = relationships
         ? relationships.map((rel) => rel.following_id).filter(Boolean)
         : [];
 
-      // If the user doesn't follow anyone yet, return empty profiles
       if (followedUserIds.length === 0) {
         console.log("User doesn't follow anyone yet");
         setProfiles([]);
+        setFriends([]);
+
+        // Make sure we load all users anyway so they can be searched
+        fetchAllUsers();
         return;
       }
 
-      // Then fetch only the profiles of followed users
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
@@ -508,18 +523,26 @@ function Chat() {
       if (error) {
         console.error("Error fetching followed profiles:", error);
         setProfiles([]);
+        setFriends([]);
         return;
       }
 
       console.log(`Fetched ${data?.length || 0} followed user profiles`);
       setProfiles(data || []);
+
+      // Use the new function to enhance profiles with conversation data
+      const enhancedFriends = await updateFriendsWithConversationData(
+        data || []
+      );
+      console.log("Setting friends data:", enhancedFriends);
+      setFriends(enhancedFriends);
     } catch (error) {
       console.error("Error in fetchProfiles:", error);
       setProfiles([]);
+      setFriends([]);
     }
   }
 
-  // Fetch all users for global search
   async function fetchAllUsers() {
     try {
       const { data, error } = await supabase
@@ -544,8 +567,8 @@ function Chat() {
   // Filter followed users based on search term
   const filteredProfiles = profiles.filter(
     (profile) =>
-      profile.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      profile.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
+      profile.username?.toLowerCase().includes(query.toLowerCase()) ||
+      profile.full_name?.toLowerCase().includes(query.toLowerCase())
   );
 
   // Fetch all users when session changes
@@ -985,6 +1008,86 @@ function Chat() {
     }
   }
 
+  // Handle selecting a friend from the friends list
+  const handleFriendSelect = (friend) => {
+    setSelectedUser(friend);
+    setSearchingUsers(false);
+    setSelectedChat(friend);
+
+    // Mobile view navigation
+    if (isMobileView) {
+      setShowSidebar(false);
+    }
+  };
+
+  // Handle selecting a user from search results
+  const handleUserSelect = (user) => {
+    setSelectedUser(user);
+    setSearchingUsers(false);
+    setSelectedChat(user);
+    setQuery("");
+    setSearchResults([]);
+
+    // Mobile view navigation
+    if (isMobileView) {
+      setShowSidebar(false);
+    }
+  };
+
+  // Handle file button click
+  const handleFileButtonClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // Handle canceling a file upload
+  const handleCancelFileUpload = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    setUploadError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // Format timestamp for messages
+  const formatTimestamp = (timestamp) => {
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  // Handle sending a message
+  const handleSendMessage = (e) => {
+    sendMessage(e);
+  };
+
+  // Simple login function for testing
+  async function handleLogin() {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: "test@example.com",
+        password: "password123",
+      });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("Error logging in");
+    }
+  }
+
   // Send a new message
   async function sendMessage(e) {
     e.preventDefault();
@@ -1102,107 +1205,50 @@ function Chat() {
     },
   };
 
-  // Add global search UI
-  const renderGlobalSearch = () => (
-    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-2xl px-4">
-      <div className="relative">
-        <input
-          type="text"
-          placeholder="Search all users..."
-          value={globalSearchTerm}
-          onChange={(e) => setGlobalSearchTerm(e.target.value)}
-          onFocus={() => setShowGlobalSearch(true)}
-          className="w-full bg-gray-800 text-white px-4 py-2 rounded-lg pl-10 focus:outline-none focus:ring-1 focus:ring-gray-600"
-        />
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5 text-gray-400 absolute left-3 top-2.5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
-      </div>
-      {showGlobalSearch && globalSearchTerm && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 rounded-lg shadow-lg max-h-96 overflow-y-auto">
-          {filteredAllUsers.length === 0 ? (
-            <div className="p-4 text-gray-400">No users found</div>
-          ) : (
-            <div className="divide-y divide-gray-700">
-              {filteredAllUsers.map((user, index) => (
-                <div
-                  key={`global-user-${user.id}-${index}`}
-                  className="p-4 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
-                >
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-gray-700 mr-3 overflow-hidden">
-                      {user.avatar_url ? (
-                        <img
-                          src={user.avatar_url}
-                          alt={user.username || user.full_name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-sm font-medium text-gray-300">
-                          {(user.username || user.full_name || "U")
-                            .charAt(0)
-                            .toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-white font-medium">
-                        {user.username || user.full_name || "Anonymous User"}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {user.status === "online" ? "Online" : "Offline"}
-                      </div>
-                    </div>
-                  </div>
-                  {renderFollowButton(user)}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
   // Modify the sidebar search
   const renderSidebarSearch = () => (
     <div className="p-4 border-b border-gray-700">
       <div className="relative">
         <input
           type="text"
-          placeholder="Search followed users..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full bg-gray-700 text-gray-100 px-4 py-2 rounded-lg pl-10 focus:outline-none focus:ring-1 focus:ring-gray-600"
+          placeholder={
+            searchingUsers ? "Search users..." : "Search conversations..."
+          }
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full bg-gray-800/70 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
         />
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5 text-gray-400 absolute left-3 top-2.5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
+        <button
+          onClick={() => setSearchingUsers(!searchingUsers)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
+          {searchingUsers ? (
+            <span className="text-xs font-medium">View Friends</span>
+          ) : (
+            <span className="text-xs font-medium">Find Users</span>
+          )}
+        </button>
       </div>
     </div>
   );
+
+  // Additional function to populate friends with conversation data
+  async function updateFriendsWithConversationData(profiles) {
+    if (!profiles || profiles.length === 0) return [];
+
+    // Skip attempting to fetch messages for now
+    // Just provide the basic friend data with empty message info
+    const friendsWithData = profiles.map((profile) => {
+      return {
+        ...profile,
+        last_message: "",
+        last_message_time: null,
+        is_online: profile.status === "online" || false,
+      };
+    });
+
+    return friendsWithData;
+  }
 
   if (loading) {
     return (
@@ -1232,289 +1278,152 @@ function Chat() {
   }
 
   return (
-    <div className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_40%,_#000000_80%)] h-screen w-screen overflow-hidden">
-      {renderGlobalSearch()}
-      <div className="flex h-full text-gray-100 relative backdrop-blur-3xl">
-        {/* Mobile Header */}
-        {isMobileView && selectedUser && (
-          <div className="fixed top-0 left-0 right-0 z-10 bg-gray-800/50 backdrop-blur-sm border-b border-gray-700 p-3 flex items-center">
-            <button
-              onClick={() => setShowSidebar(true)}
-              className="p-2 text-gray-300 hover:text-white rounded-full hover:bg-gray-700 transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-            </button>
-            <div className="flex items-center ml-3">
-              <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center mr-2 overflow-hidden">
-                {selectedUser.avatar_url ? (
-                  <img
-                    src={selectedUser.avatar_url}
-                    alt={selectedUser.username || selectedUser.full_name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-sm font-medium text-gray-300">
-                    {(selectedUser.username || selectedUser.full_name || "U")
-                      .charAt(0)
-                      .toUpperCase()}
-                  </span>
-                )}
-              </div>
-              <div>
-                <div className="font-medium text-sm text-white">
-                  {selectedUser.username ||
-                    selectedUser.full_name ||
-                    "Anonymous User"}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+    <div className="min-h-screen flex bg-[radial-gradient(ellipse_at_center,_#0f172a_0%,_#042f2e_0%,_#000000_80%)] text-white">
+      <div className="w-full max-w-8xl mx-auto flex flex-col md:flex-row shadow-2xl rounded-xl overflow-hidden ">
+        {/* Left sidebar (friend list) */}
+        <div className="md:w-80 bg-black/30 backdrop-blur-sm border-r border-gray-800/50">
+          <div className="p-4 border-b border-gray-800/50">
+            <h2 className="text-lg font-semibold mb-4">Messages</h2>
 
-        {/* Sidebar */}
-        <div
-          className={`${
-            isMobileView
-              ? "fixed inset-0 z-20 transform transition-transform duration-300 ease-in-out"
-              : "w-1/4"
-          } ${
-            showSidebar ? "translate-x-0" : "-translate-x-full"
-          } bg-gray-800/50 backdrop-blur-sm border-r border-gray-700 flex flex-col`}
-        >
-          {/* User Profile */}
-          <div className="p-4 border-b border-gray-700 mt-22">
-            <div className="flex items-center">
-              <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mr-3 overflow-hidden">
-                {session?.user?.user_metadata?.avatar_url ? (
-                  <img
-                    src={session.user.user_metadata.avatar_url}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-lg font-medium text-gray-300">
-                    {(session?.user?.email || "U").charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </div>
-              <div className="flex-grow">
-                <div className="font-medium text-white">
-                  {session?.user?.user_metadata?.full_name ||
-                    session?.user?.email}
-                </div>
-                <div className="text-sm text-gray-400"></div>
-              </div>
-              {isMobileView && (
-                <button
-                  onClick={() => setShowSidebar(false)}
-                  className="p-2 text-gray-300 hover:text-white rounded-full hover:bg-gray-700 transition-colors"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              )}
+            {/* Search box */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder={
+                  searchingUsers ? "Search users..." : "Search conversations..."
+                }
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="w-full bg-gray-800/70 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
               <button
-                onClick={() => supabase.auth.signOut()}
-                className="p-2 text-gray-300 hover:text-white rounded-full hover:bg-gray-700 transition-colors"
+                onClick={() => setSearchingUsers(!searchingUsers)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                  />
-                </svg>
+                {searchingUsers ? (
+                  <span className="text-xs font-medium">View Friends</span>
+                ) : (
+                  <span className="text-xs font-medium">Find Users</span>
+                )}
               </button>
             </div>
           </div>
 
-          {renderSidebarSearch()}
-
-          {/* Conversations List */}
-          <div className="flex-grow overflow-y-auto">
-            {filteredProfiles.map((profile, index) => (
-              <div
-                key={`profile-${profile.id}-${index}`}
-                className={`p-4 flex items-center cursor-pointer transition-colors ${
-                  selectedUser?.id === profile.id
-                    ? "bg-gray-700/50"
-                    : "hover:bg-gray-700/50"
-                }`}
-                onClick={() => {
-                  setSelectedUser(profile);
-                  if (isMobileView) {
-                    setShowSidebar(false);
-                  }
-                }}
-              >
-                <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mr-3 overflow-hidden">
-                  {profile.avatar_url ? (
-                    <img
-                      src={profile.avatar_url}
-                      alt={profile.username || profile.full_name}
-                      className="w-full h-full object-cover"
-                    />
+          {/* Search results or friend list */}
+          <div className="overflow-y-auto h-[calc(100vh-180px)]">
+            {searchingUsers ? (
+              <div className="p-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-2">
+                  Search Results
+                </h3>
+                {query.trim() ? (
+                  allUsers.filter(
+                    (user) =>
+                      user.username
+                        ?.toLowerCase()
+                        .includes(query.toLowerCase()) ||
+                      user.full_name
+                        ?.toLowerCase()
+                        .includes(query.toLowerCase())
+                  ).length === 0 ? (
+                    <p className="text-sm text-gray-400 px-2">
+                      No users found matching "{query}"
+                    </p>
                   ) : (
-                    <span className="text-lg font-medium text-gray-300">
-                      {(profile.username || profile.full_name || "U")
-                        .charAt(0)
-                        .toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <div className="flex-grow">
-                  <div className="font-medium text-white">
-                    {profile.username || profile.full_name || "Anonymous User"}
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    {profile.status === "online" ? "Online" : "Offline"}
-                  </div>
-                </div>
+                    <ul>
+                      {allUsers
+                        .filter(
+                          (user) =>
+                            user.username
+                              ?.toLowerCase()
+                              .includes(query.toLowerCase()) ||
+                            user.full_name
+                              ?.toLowerCase()
+                              .includes(query.toLowerCase())
+                        )
+                        .map((user) => (
+                          <li
+                            key={user.id}
+                            className="rounded-lg hover:bg-gray-800/50 mb-1"
+                          >
+                            <button
+                              onClick={() => handleUserSelect(user)}
+                              className="flex items-center w-full p-2 text-left"
+                            >
+                              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3">
+                                {user.username
+                                  ? user.username[0].toUpperCase()
+                                  : "U"}
+                              </div>
+                              <div>
+                                <div className="font-medium">
+                                  {user.username || user.email}
+                                </div>
+                                {user.full_name && (
+                                  <div className="text-sm text-gray-400">
+                                    {user.full_name}
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                    </ul>
+                  )
+                ) : (
+                  <p className="text-sm text-gray-400 px-2">
+                    Type to search for users
+                  </p>
+                )}
               </div>
-            ))}
+            ) : (
+              <FriendsList
+                friends={friends}
+                selectedChat={selectedChat}
+                onFriendSelect={handleFriendSelect}
+              />
+            )}
           </div>
         </div>
 
-        {/* Main Chat Area */}
-        <div
-          className={`flex-1 flex flex-col ${
-            isMobileView ? "w-full" : ""
-          } md: mt-18`}
-        >
-          {selectedUser ? (
+        {/* Right side (chat area) */}
+        <div className="flex-1 flex flex-col bg-black/30 backdrop-blur-sm">
+          {selectedChat ? (
             <>
-              {!isMobileView && (
-                <div className="p-4 border-b border-gray-700 bg-gray-800/50 backdrop-blur-sm">
-                  <div className="flex items-center">
-                    <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mr-3 overflow-hidden">
-                      {selectedUser.avatar_url ? (
-                        <img
-                          src={selectedUser.avatar_url}
-                          alt={selectedUser.username || selectedUser.full_name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-lg font-medium text-gray-300">
-                          {(
-                            selectedUser.username ||
-                            selectedUser.full_name ||
-                            "U"
-                          )
-                            .charAt(0)
-                            .toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-medium text-white">
-                        {selectedUser.username ||
-                          selectedUser.full_name ||
-                          "Anonymous User"}
-                      </div>
-                      <div className="text-sm text-gray-400">
-                        {selectedUser.status === "online" ? (
-                          <span className="flex items-center">
-                            <span className="w-2 h-2 rounded-full bg-green-500 mr-1"></span>
-                            ""
-                          </span>
-                        ) : (
-                          ""
-                        )}
-                      </div>
-                    </div>
-                  </div>
+              {/* Chat header */}
+              <div className="px-4 py-3 border-b border-gray-800/50 flex items-center">
+                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3">
+                  {selectedChat.username
+                    ? selectedChat.username[0].toUpperCase()
+                    : "U"}
                 </div>
-              )}
-
-              {/* Messages */}
-              <div
-                ref={chatContainerRef}
-                className={`flex-grow overflow-y-auto p-4 space-y-4 ${
-                  isMobileView ? "mt-14 mb-20" : ""
-                }`}
-              >
-                {messages.map((message, index) => {
-                  const isMyMessage = message.sender_id === session.user.id;
-                  return (
-                    <div
-                      key={`message-${message.id}-${index}`}
-                      className={`flex ${
-                        isMyMessage ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-2 ${
-                          isMyMessage
-                            ? `${theme.message.sent} rounded-tr-none`
-                            : `${theme.message.received} rounded-tl-none`
-                        }`}
-                      >
-                        {message.content}
-                        {message.is_attachment &&
-                          renderAttachment(message.attachment_url)}
-                        <div className="text-xs text-gray-400 mt-1">
-                          {formatTime(message.created_at)}
-                        </div>
-                      </div>
+                <div>
+                  <div className="font-medium">
+                    {selectedChat.username || selectedChat.email}
+                  </div>
+                  {selectedChat.is_online ? (
+                    <div className="text-xs text-green-500 flex items-center">
+                      <span className="w-2 h-2 rounded-full bg-green-500 mr-1"></span>
+                      Online
                     </div>
-                  );
-                })}
-                <div ref={messagesEndRef} />
+                  ) : (
+                    <div className="text-xs text-gray-400">Offline</div>
+                  )}
+                </div>
               </div>
 
-              {/* Message Input */}
+              {/* Messages area */}
               <div
-                className={`p-4 border-t border-gray-700 bg-gray-800/50 backdrop-blur-sm ${
-                  isMobileView ? "fixed bottom-0 left-0 right-0" : ""
-                }`}
+                ref={messageContainerRef}
+                className="flex-1 overflow-y-auto p-4"
+                style={{ maxHeight: "calc(100vh - 170px)" }}
               >
-                {filePreview && (
-                  <div className="mb-4 p-3 bg-gray-700/50 rounded-lg flex items-center">
-                    <div className="flex-grow">
-                      <div className="text-sm font-medium text-white">
-                        {filePreview.name}
-                      </div>
-                      <div className="text-xs text-gray-400">Ready to send</div>
-                    </div>
-                    <button
-                      onClick={cancelFileUpload}
-                      className="text-gray-300 hover:text-white"
-                    >
+                <div className="space-y-4">
+                  {messages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5"
+                        className="h-12 w-12 mb-2"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -1522,23 +1431,162 @@ function Chat() {
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
+                          strokeWidth={1.5}
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        />
+                      </svg>
+                      <p>Start a conversation!</p>
+                    </div>
+                  ) : (
+                    messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`flex ${
+                          message.sender_id === session.user.id
+                            ? "justify-end"
+                            : "justify-start"
+                        }`}
+                      >
+                        <div
+                          className={`max-w-[75%] rounded-2xl px-4 py-2 ${
+                            message.sender_id === session.user.id
+                              ? "bg-blue-600 text-white rounded-tr-none"
+                              : "bg-gray-700 text-white rounded-tl-none"
+                          }`}
+                        >
+                          {message.file_url ? (
+                            <div className="mb-2">
+                              {message.file_url.match(
+                                /\.(jpeg|jpg|gif|png)$/
+                              ) ? (
+                                <img
+                                  src={message.file_url}
+                                  alt="Shared file"
+                                  className="max-w-full rounded-lg cursor-pointer"
+                                  onClick={() =>
+                                    window.open(message.file_url, "_blank")
+                                  }
+                                />
+                              ) : (
+                                <a
+                                  href={message.file_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center bg-gray-800 rounded-lg p-2 hover:bg-gray-700"
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-5 w-5 mr-2 text-blue-400"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={1.5}
+                                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                    />
+                                  </svg>
+                                  Download file
+                                </a>
+                              )}
+                            </div>
+                          ) : null}
+                          {message.content}
+                          <div
+                            className={`text-xs mt-1 ${
+                              message.sender_id === session.user.id
+                                ? "text-blue-200"
+                                : "text-gray-300"
+                            }`}
+                          >
+                            {formatTimestamp(message.created_at)}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+              </div>
+
+              {/* Message input area */}
+              <div className="p-3 border-t border-gray-800/50">
+                {selectedFile && (
+                  <div className="mb-2 p-2 bg-gray-800 rounded-lg flex items-center">
+                    <div className="mr-2 flex-shrink-0">
+                      {selectedFile.type.startsWith("image/") ? (
+                        <img
+                          src={filePreview}
+                          alt="Preview"
+                          className="h-10 w-10 object-cover rounded"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded bg-blue-600 flex items-center justify-center">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5 text-white"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.5}
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate text-sm">
+                        {selectedFile.name}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {formatFileSize(selectedFile.size)}
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleCancelFileUpload}
+                      className="ml-2 text-gray-400 hover:text-white"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                          clipRule="evenodd"
                         />
                       </svg>
                     </button>
                   </div>
                 )}
-                <form onSubmit={sendMessage} className="flex items-center">
+
+                {uploadError && (
+                  <div className="mb-2 p-2 text-sm bg-red-900/50 text-red-300 rounded-lg">
+                    {uploadError}
+                  </div>
+                )}
+
+                <form
+                  onSubmit={handleSendMessage}
+                  className="flex items-center"
+                >
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2 text-gray-300 hover:text-white rounded-full hover:bg-gray-700 transition-colors"
-                    disabled={uploading}
+                    onClick={handleFileButtonClick}
+                    className="p-2 rounded-full text-gray-400 hover:text-white focus:outline-none"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
+                      className="h-6 w-6"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -1546,38 +1594,36 @@ function Chat() {
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        strokeWidth={2}
+                        strokeWidth={1.5}
                         d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
                       />
                     </svg>
                   </button>
                   <input
                     type="file"
+                    className="hidden"
                     ref={fileInputRef}
                     onChange={handleFileSelect}
-                    className="hidden"
-                    disabled={uploading}
                   />
                   <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Type a message..."
-                    className="flex-grow mx-4 bg-gray-700 text-gray-100 px-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-600"
-                    disabled={uploading}
+                    className="flex-1 bg-gray-800/70 border border-gray-700 rounded-lg px-4 py-2 mx-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                   <button
                     type="submit"
-                    disabled={uploading || (!newMessage.trim() && !filePreview)}
+                    disabled={isUploading || (!newMessage && !selectedFile)}
                     className={`p-2 rounded-full ${
-                      !newMessage.trim() && !filePreview
-                        ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                        : "bg-blue-500 text-white hover:bg-blue-600"
-                    } transition-colors`}
+                      isUploading || (!newMessage && !selectedFile)
+                        ? "text-gray-500"
+                        : "text-blue-500 hover:text-blue-400"
+                    }`}
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
+                      className="h-6 w-6"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -1585,7 +1631,7 @@ function Chat() {
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        strokeWidth={2}
+                        strokeWidth={1.5}
                         d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
                       />
                     </svg>
@@ -1594,38 +1640,34 @@ function Chat() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-24 h-24 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-6">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-12 w-12 text-gray-300"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    />
-                  </svg>
-                </div>
-
-                {isMobileView ? (
-                  ""
-                ) : (
-                  <>
-                    <h2 className="text-2xl font-bold mb-2 text-zinc-200">
-                      Welcome to Crecon
-                    </h2>
-                    <p className="text-gray-400 mb-6">
-                      Select a conversation to start chatting
-                    </p>
-                  </>
-                )}
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
+              <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-10 w-10 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                  />
+                </svg>
               </div>
+              <h2 className="text-xl font-bold mb-2">Your Messages</h2>
+              <p className="text-gray-400 mb-6 max-w-md">
+                Select a chat from the list or search for users to start a new
+                conversation.
+              </p>
+              <button
+                onClick={() => setSearchingUsers(true)}
+                className="px-4 py-2 bg-gradient-to-bl from-green-900 to-blue-900 rounded-lg hover:opacity-90 transition-opacity"
+              >
+                Find Users
+              </button>
             </div>
           )}
         </div>

@@ -176,7 +176,7 @@ const HeroSection = () => {
   return (
     <div
       ref={heroContainerRef}
-      className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_40%,_#000000_80%)]"
+      className="bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_4%,_#000000_80%)]"
       // style={{ backgroundSize: "200% 200%", backgroundPosition: "10% 10%" }}
     >
       <div className="relative min-h-screen bg-opacity-50 text-white overflow-hidden backdrop-blur-3xl">
