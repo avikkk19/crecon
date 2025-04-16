@@ -50,16 +50,16 @@ const Profile = () => {
   useEffect(() => {
     if (!user) return;
 
-    // Subscribe to blog posts
+    // Subscribe to blogs
     const postsSubscription = supabase
-      .channel("public:blog_posts")
+      .channel("public:blogs")
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "blog_posts",
-          filter: `user_id=eq.${user.id}`,
+          table: "blogs",
+          filter: `author_id=eq.${user.id}`,
         },
         (payload) => {
           console.log("Blog post changed:", payload);
@@ -69,16 +69,16 @@ const Profile = () => {
       )
       .subscribe();
 
-    // Subscribe to connections (followers/following)
+    // Subscribe to user_relationships (followers/following)
     const connectionsSubscription = supabase
-      .channel("public:connections")
+      .channel("public:user_relationships")
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "connections",
-          filter: `follower_id=eq.${user.id},following_id=eq.${user.id}`,
+          table: "user_relationships",
+          filter: `user_id=eq.${user.id},following_id=eq.${user.id}`,
         },
         (payload) => {
           console.log("Connection changed:", payload);
@@ -114,16 +114,6 @@ const Profile = () => {
       });
 
       if (success && user) {
-        // Create sample blog posts for the user
-        const postsResult = await createSampleBlogPosts(user.id);
-        console.log("Sample posts creation result:", postsResult);
-
-        // Update setup status with blog posts result
-        setSetupStatus((prev) => ({
-          ...prev,
-          blogPostsCreated: postsResult.success,
-        }));
-
         // Refresh data
         await fetchProfileData();
 
@@ -170,10 +160,11 @@ const Profile = () => {
     try {
       console.log(`Fetching blog posts for user: ${userId}`);
 
+      // Using the same approach as Blog.jsx
       const { data, error } = await supabase
-        .from("blog_posts")
+        .from("blogs")
         .select("*")
-        .eq("user_id", userId)
+        .eq("author_id", userId)
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -189,6 +180,8 @@ const Profile = () => {
       }
     } catch (error) {
       console.error("Exception fetching blog posts:", error);
+      setPosts([]);
+      setStats((prev) => ({ ...prev, posts: 0 }));
     }
   };
 
@@ -197,11 +190,11 @@ const Profile = () => {
     try {
       console.log(`Fetching connections for user: ${userId}`);
 
-      // Get connections where user is following someone
+      // Get connections where user is following someone (user is follower)
       const { data: followingData, error: followingError } = await supabase
-        .from("connections")
+        .from("user_relationships")
         .select("following_id")
-        .eq("follower_id", userId);
+        .eq("user_id", userId);
 
       if (followingError) {
         console.error("Error fetching following data:", followingError);
@@ -210,10 +203,10 @@ const Profile = () => {
 
       console.log(`Found ${followingData?.length || 0} following connections`);
 
-      // Get connections where user is followed by someone
+      // Get connections where user is followed by someone (user is being followed)
       const { data: followerData, error: followerError } = await supabase
-        .from("connections")
-        .select("follower_id")
+        .from("user_relationships")
+        .select("user_id")
         .eq("following_id", userId);
 
       if (followerError) {
@@ -234,56 +227,71 @@ const Profile = () => {
         followers: 0,
       }));
 
-      // Get profiles for following
+      // Get profiles for following (people the user follows)
       if (followingData && followingData.length > 0) {
-        const followingIds = followingData.map((f) => f.following_id);
+        const followingIds = followingData
+          .map((f) => f.following_id)
+          .filter((id) => id !== userId);
         console.log("Following IDs:", followingIds);
 
-        const { data: followingProfiles, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, username, email, avatar_url, is_online")
-          .in("id", followingIds);
+        if (followingIds.length > 0) {
+          const { data: followingProfiles, error: profilesError } =
+            await supabase
+              .from("profiles")
+              .select("id, username, email, avatar_url, is_online")
+              .in("id", followingIds);
 
-        if (profilesError) {
-          console.error("Error fetching following profiles:", profilesError);
-          return;
-        }
+          if (profilesError) {
+            console.error("Error fetching following profiles:", profilesError);
+            return;
+          }
 
-        console.log(
-          `Found ${followingProfiles?.length || 0} following profiles`
-        );
+          console.log(
+            `Found ${followingProfiles?.length || 0} following profiles`
+          );
 
-        if (followingProfiles) {
-          setFollowing(followingProfiles);
-          setFriends(followingProfiles);
-          setStats((prev) => ({
-            ...prev,
-            following: followingProfiles.length,
-            friends: followingProfiles.length,
-          }));
+          if (followingProfiles) {
+            setFollowing(followingProfiles);
+            setFriends(followingProfiles);
+            setStats((prev) => ({
+              ...prev,
+              following: followingProfiles.length,
+              friends: followingProfiles.length,
+            }));
+          }
         }
       }
 
-      // Get profiles for followers
+      // Get profiles for followers (people who follow the user)
       if (followerData && followerData.length > 0) {
-        const followerIds = followerData.map((f) => f.follower_id);
+        const followerIds = followerData
+          .map((f) => f.user_id)
+          .filter((id) => id !== userId);
         console.log("Follower IDs:", followerIds);
 
-        const { data: followerProfiles, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, username, email, avatar_url, is_online")
-          .in("id", followerIds);
+        if (followerIds.length > 0) {
+          const { data: followerProfiles, error: profilesError } =
+            await supabase
+              .from("profiles")
+              .select("id, username, email, avatar_url, is_online")
+              .in("id", followerIds);
 
-        if (profilesError) {
-          console.error("Error fetching follower profiles:", profilesError);
-          return;
-        }
+          if (profilesError) {
+            console.error("Error fetching follower profiles:", profilesError);
+            return;
+          }
 
-        console.log(`Found ${followerProfiles?.length || 0} follower profiles`);
+          console.log(
+            `Found ${followerProfiles?.length || 0} follower profiles`
+          );
 
-        if (followerProfiles) {
-          setFollowers(followerProfiles);
-          setStats((prev) => ({ ...prev, followers: followerProfiles.length }));
+          if (followerProfiles) {
+            setFollowers(followerProfiles);
+            setStats((prev) => ({
+              ...prev,
+              followers: followerProfiles.length,
+            }));
+          }
         }
       }
     } catch (error) {
@@ -351,9 +359,9 @@ const Profile = () => {
       if (user && targetUserId !== user.id) {
         try {
           const { data: connectionData } = await supabase
-            .from("connections")
+            .from("user_relationships")
             .select("*")
-            .eq("follower_id", user.id)
+            .eq("user_id", user.id)
             .eq("following_id", targetUserId)
             .single();
 
@@ -478,9 +486,9 @@ const Profile = () => {
         // Unfollow logic
         try {
           const { error } = await supabase
-            .from("connections")
+            .from("user_relationships")
             .delete()
-            .eq("follower_id", user.id)
+            .eq("user_id", user.id)
             .eq("following_id", profile.id);
 
           if (error) throw error;
@@ -507,8 +515,8 @@ const Profile = () => {
       } else {
         // Try direct connection first
         try {
-          const { error } = await supabase.from("connections").insert({
-            follower_id: user.id,
+          const { error } = await supabase.from("user_relationships").insert({
+            user_id: user.id,
             following_id: profile.id,
             created_at: new Date(),
           });
@@ -568,9 +576,9 @@ const Profile = () => {
 
       // First check if you already have this connection
       const { data: existingConnection, error: checkError } = await supabase
-        .from("connections")
+        .from("user_relationships")
         .select("*")
-        .eq("follower_id", user.id)
+        .eq("user_id", user.id)
         .eq("following_id", user.id)
         .single();
 
@@ -588,11 +596,13 @@ const Profile = () => {
       }
 
       // Create a self-connection for testing
-      const { error: insertError } = await supabase.from("connections").insert({
-        follower_id: user.id,
-        following_id: user.id,
-        created_at: new Date(),
-      });
+      const { error: insertError } = await supabase
+        .from("user_relationships")
+        .insert({
+          user_id: user.id,
+          following_id: user.id,
+          created_at: new Date(),
+        });
 
       if (insertError) {
         console.error("Error creating test connection:", insertError);
@@ -611,7 +621,7 @@ const Profile = () => {
     }
   };
 
-  // Add a test blog post (for testing purposes only)
+  // Update createTestBlogPost to match Blog.jsx
   const createTestBlogPost = async () => {
     try {
       if (!user) {
@@ -621,23 +631,27 @@ const Profile = () => {
 
       console.log("Creating test blog post...");
 
-      // Create a test blog post
-      const { error: insertError } = await supabase.from("blog_posts").insert({
-        title: "Test Blog Post",
-        content:
-          "This is a test blog post created for testing purposes. It demonstrates that the blog_posts table is working correctly.",
-        user_id: user.id,
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
+      // Using same structure as Blog.jsx
+      const { data, error } = await supabase
+        .from("blogs")
+        .insert({
+          title: "Test Blog Post",
+          summary: "This is a summary of the test blog post.",
+          content:
+            "This is the full content of the test blog post. It demonstrates that the blogs table is working correctly.",
+          author_id: user.id,
+          created_at: new Date(),
+          updated_at: new Date(),
+        })
+        .select();
 
-      if (insertError) {
-        console.error("Error creating test blog post:", insertError);
-        setError(`Error creating test blog post: ${insertError.message}`);
+      if (error) {
+        console.error("Error creating test blog post:", error);
+        setError(`Error creating test blog post: ${error.message}`);
         return;
       }
 
-      console.log("Test blog post created successfully!");
+      console.log("Test blog post created successfully:", data);
       alert("Test blog post created successfully! Refresh to see results.");
 
       // Refresh the data
@@ -1072,7 +1086,7 @@ const Profile = () => {
                   </p>
                   <div className="flex justify-end">
                     <a
-                      href={`/blog/${post.id}`}
+                      href={`/blog`}
                       className="text-blue-400 hover:text-blue-300 text-sm font-medium"
                     >
                       Read more

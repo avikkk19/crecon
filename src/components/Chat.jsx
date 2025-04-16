@@ -844,9 +844,9 @@ function Chat() {
       const { error: uploadError } = await supabase.storage
         .from(BUCKET_NAME)
         .upload(filePath, file, {
-          metadata: {
-            user_id: session.user.id,
-          },
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type,
         });
 
       if (uploadError) throw uploadError;
@@ -870,6 +870,7 @@ function Chat() {
   function handleFileSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
+    setSelectedFile(file);
 
     if (file.size > MAX_FILE_SIZE) {
       alert(
@@ -887,7 +888,7 @@ function Chat() {
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      // Only set preview for images
+      // Set preview for all file types
       if (file.type.startsWith("image/")) {
         setFilePreview({
           url: reader.result,
@@ -958,8 +959,8 @@ function Chat() {
   function renderAttachment(url) {
     if (!url) return null;
 
-    // Robust check for image file extensions
-    if (/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i.test(url)) {
+    // More comprehensive check for image file extensions
+    if (/\.(jpeg|jpg|gif|png|webp|bmp|svg|avif|tiff)$/i.test(url)) {
       return (
         <div className="mt-2 max-w-xs overflow-hidden rounded-lg">
           <img
@@ -972,7 +973,24 @@ function Chat() {
         </div>
       );
     } else {
+      // Extract filename from URL
       const filename = url.substring(url.lastIndexOf("/") + 1);
+      // Try to determine file type from extension
+      const extension = filename.split(".").pop().toLowerCase();
+      let fileIcon = "document"; // default icon
+
+      // Map common extensions to file types
+      if (["pdf"].includes(extension)) fileIcon = "pdf";
+      else if (["doc", "docx"].includes(extension)) fileIcon = "word";
+      else if (["xls", "xlsx"].includes(extension)) fileIcon = "excel";
+      else if (["ppt", "pptx"].includes(extension)) fileIcon = "powerpoint";
+      else if (["zip", "rar", "7z", "tar", "gz"].includes(extension))
+        fileIcon = "archive";
+      else if (["mp3", "wav", "ogg", "flac"].includes(extension))
+        fileIcon = "audio";
+      else if (["mp4", "avi", "mov", "wmv", "mkv"].includes(extension))
+        fileIcon = "video";
+
       return (
         <div className="mt-2">
           <a
@@ -1096,19 +1114,32 @@ function Chat() {
 
     let attachmentUrl = null;
     let messageContent = newMessage.trim();
-    const fileToSend = fileInputRef.current?.files[0];
 
-    if (filePreview && fileToSend) {
-      attachmentUrl = await uploadFile(fileToSend);
+    // Use selectedFile state instead of fileInputRef.current.files[0]
+    if (filePreview && selectedFile) {
+      setIsUploading(true);
+      try {
+        attachmentUrl = await uploadFile(selectedFile);
 
-      if (!attachmentUrl && !messageContent) {
-        setUploading(false);
+        if (!attachmentUrl && !messageContent) {
+          setIsUploading(false);
+          return;
+        }
+
+        if (attachmentUrl) {
+          messageContent = messageContent
+            ? `${messageContent} [ATTACHMENT]${attachmentUrl}`
+            : `[ATTACHMENT]${attachmentUrl}`;
+        }
+      } catch (error) {
+        console.error("File upload failed:", error);
+        setIsUploading(false);
         return;
       }
+    }
 
-      if (attachmentUrl) {
-        messageContent = `${messageContent || ""} [ATTACHMENT]${attachmentUrl}`;
-      }
+    if (attachmentUrl) {
+      messageContent = `${messageContent || ""} [ATTACHMENT]${attachmentUrl}`;
     }
 
     if (!messageContent.trim()) {
@@ -1144,7 +1175,12 @@ function Chat() {
       };
 
       setMessages((prevMessages) => [...prevMessages, optimisticMessage]);
+
+      // Clear input field after sending message
       setNewMessage("");
+
+      // After successful message send, make sure to reset file states
+      setSelectedFile(null);
       setFilePreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
 
@@ -1454,46 +1490,14 @@ function Chat() {
                               : "bg-gray-700 text-white rounded-tl-none"
                           }`}
                         >
-                          {message.file_url ? (
-                            <div className="mb-2">
-                              {message.file_url.match(
-                                /\.(jpeg|jpg|gif|png)$/
-                              ) ? (
-                                <img
-                                  src={message.file_url}
-                                  alt="Shared file"
-                                  className="max-w-full rounded-lg cursor-pointer"
-                                  onClick={() =>
-                                    window.open(message.file_url, "_blank")
-                                  }
-                                />
-                              ) : (
-                                <a
-                                  href={message.file_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center bg-gray-800 rounded-lg p-2 hover:bg-gray-700"
-                                >
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className="h-5 w-5 mr-2 text-blue-400"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={1.5}
-                                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                    />
-                                  </svg>
-                                  Download file
-                                </a>
-                              )}
+                          {message.is_attachment &&
+                            message.attachment_url &&
+                            renderAttachment(message.attachment_url)}
+                          {message.content && (
+                            <div className="mt-1">
+                              {processContent(message.content)}
                             </div>
-                          ) : null}
-                          {message.content}
+                          )}
                           <div
                             className={`text-xs mt-1 ${
                               message.sender_id === session.user.id
@@ -1518,9 +1522,9 @@ function Chat() {
                     <div className="mr-2 flex-shrink-0">
                       {selectedFile.type.startsWith("image/") ? (
                         <img
-                          src={filePreview}
+                          src={filePreview?.url}
                           alt="Preview"
-                          className="h-10 w-10 object-cover rounded"
+                          className="h-12 w-12 object-cover rounded"
                         />
                       ) : (
                         <div className="h-10 w-10 rounded bg-blue-600 flex items-center justify-center">

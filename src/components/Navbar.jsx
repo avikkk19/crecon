@@ -193,11 +193,13 @@ const Navbar = () => {
             title="Chat"
           >
             <svg
-              className="w-4 h-4 fill-current text-slate-400"
-              viewBox="0 0 16 16"
+              class="fill-current"
+              xmlns="http://www.w3.org/2000/svg"
+              width="21"
+              height="21"
             >
-              <path d="M8 0C3.6 0 0 3.6 0 8s3.6 8 8 8 8-3.6 8-8-3.6-8-8-8zm0 12c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" />
-              <path fillOpacity=".16" d="m13.4 18-3-7.4-7.4-3L19 2z"></path>
+              <path fill-opacity=".16" d="m13.4 18-3-7.4-7.4-3L19 2z"></path>
+              <path d="M13.331 15.169 17.37 3.63 5.831 7.669l5.337 2.163 2.163 5.337Zm-3.699-3.801L.17 7.53 20.63.37l-7.161 20.461-3.837-9.463Z"></path>
             </svg>
             {isActive("/chat") && (
               <p className="text-sm m-2 mt-3 animate-fadeIn">CHAT</p>
