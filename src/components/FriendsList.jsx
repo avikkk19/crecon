@@ -1,8 +1,19 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 function FriendsList({ friends, selectedChat, onFriendSelect }) {
   const navigate = useNavigate();
+
+  // Debug: Log friends data on component mount
+  useEffect(() => {
+    if (friends && friends.length > 0) {
+      console.log("Friends in FriendsList:", friends);
+      // Log specific avatar_url values
+      friends.forEach((friend) => {
+        console.log(`Friend ${friend.id} avatar:`, friend.avatar_url);
+      });
+    }
+  }, [friends]);
 
   // Format last message time
   const formatTime = (timestamp) => {
@@ -63,8 +74,25 @@ function FriendsList({ friends, selectedChat, onFriendSelect }) {
             }`}
           >
             <div className="relative">
-              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3">
-                {friend.username ? friend.username[0].toUpperCase() : "U"}
+              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3 overflow-hidden">
+                {friend.avatar_url ? (
+                  <img
+                    src={friend.avatar_url}
+                    alt={friend.username || "User"}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.log(
+                        `Failed to load image for ${friend.id}:`,
+                        friend.avatar_url
+                      );
+                      e.target.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <span>
+                    {friend.username ? friend.username[0].toUpperCase() : "U"}
+                  </span>
+                )}
               </div>
               {friend.is_online && (
                 <div className="absolute bottom-0 right-3 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"></div>

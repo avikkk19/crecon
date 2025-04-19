@@ -1450,10 +1450,18 @@ function Chat() {
                               onClick={() => handleUserSelect(user)}
                               className="flex items-center w-full p-2 text-left"
                             >
-                              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3">
-                                {user.username
-                                  ? user.username[0].toUpperCase()
-                                  : "U"}
+                              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3 overflow-hidden">
+                                {user.avatar_url ? (
+                                  <img
+                                    src={user.avatar_url}
+                                    alt={user.username || user.full_name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : user.username ? (
+                                  user.username[0].toUpperCase()
+                                ) : (
+                                  "U"
+                                )}
                               </div>
                               <div>
                                 <div className="font-medium">
@@ -1511,12 +1519,20 @@ function Chat() {
               {/* Chat header */}
               <div className="px-4 py-3 border-b border-gray-800/50 flex items-center">
                 <div
-                  className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3 cursor-pointer hover:opacity-80"
+                  className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3 cursor-pointer hover:opacity-80 overflow-hidden"
                   onClick={() => navigateToProfile(selectedChat.id)}
                 >
-                  {selectedChat.username
-                    ? selectedChat.username[0].toUpperCase()
-                    : "U"}
+                  {selectedChat.avatar_url ? (
+                    <img
+                      src={selectedChat.avatar_url}
+                      alt={selectedChat.username || selectedChat.full_name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : selectedChat.username ? (
+                    selectedChat.username[0].toUpperCase()
+                  ) : (
+                    "U"
+                  )}
                 </div>
                 <div
                   className="cursor-pointer hover:opacity-80"
