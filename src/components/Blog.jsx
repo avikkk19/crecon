@@ -297,16 +297,25 @@ function Blog() {
 
     console.log("Starting chat with author:", authorId, "about blog:", blog.id);
 
+    // Get author profile data
     const authorData = {
       id: authorId,
       username: profiles[authorId]?.username || "Anonymous",
+      full_name: profiles[authorId]?.full_name || null,
       avatar_url: profiles[authorId]?.avatar_url || null,
+      email: profiles[authorId]?.email || null,
     };
 
+    // Store the selected user in session storage for the chat component to use
     sessionStorage.setItem("selectedUser", JSON.stringify(authorData));
     console.log("Set selectedUser in sessionStorage:", authorData);
 
-    navigate(`/chat/${authorId}`); // Use navigate function instead of Navigate component
+    // Create an initial message about the blog post if desired
+    const blogLink = `Hey! I saw your post about: "${blog.title}" and I wanted to say hi! and discuss a few things with you about it.`;
+    sessionStorage.setItem("initialMessage", blogLink);
+
+    // Navigate to the chat with this user
+    navigate(`/chat/${authorId}`);
   }
 
   // Open blog detail view

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "./SupabaseClient.jsx";
 import FriendsList from "./FriendsList.jsx";
-import { setupDatabase, createSampleBlogPosts } from "../db/setupDatabase.js";
+import { setupDatabase } from "../db/setupDatabase.js";
 
 const Profile = () => {
   const { userId } = useParams();
@@ -33,6 +33,25 @@ const Profile = () => {
   });
   const [isEditing, setIsEditing] = useState(false);
   const [updatedBio, setUpdatedBio] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchRef = useRef(null);
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowSearchResults(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Fetch current user
   useEffect(() => {
@@ -554,6 +573,26 @@ const Profile = () => {
     navigate(`/chat/${friend.id}`);
   };
 
+  // Start direct chat with user
+  const startDirectChat = (userId, username, fullName) => {
+    if (!userId) return;
+
+    // Store user data for chat component to use
+    const userData = {
+      id: userId,
+      username: username || "User",
+      full_name: fullName,
+      avatar_url: profile?.avatar_url || null,
+      email: profile?.email || null,
+    };
+
+    // Set in session storage for the Chat component to pick up
+    sessionStorage.setItem("selectedUser", JSON.stringify(userData));
+
+    // Navigate to chat with this user
+    navigate(`/chat/${userId}`);
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return "";
     const date = new Date(dateString);
@@ -562,104 +601,6 @@ const Profile = () => {
       month: "short",
       day: "numeric",
     });
-  };
-
-  // Test creating a connection to yourself (for testing purposes only)
-  const createTestConnection = async () => {
-    try {
-      if (!user) {
-        setError("You need to be logged in to create a test connection");
-        return;
-      }
-
-      console.log("Creating test connection...");
-
-      // First check if you already have this connection
-      const { data: existingConnection, error: checkError } = await supabase
-        .from("user_relationships")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("following_id", user.id)
-        .single();
-
-      if (checkError && checkError.code !== "PGRST116") {
-        console.error("Error checking for existing connection:", checkError);
-        setError("Error checking for existing connection");
-        return;
-      }
-
-      // If connection already exists
-      if (existingConnection) {
-        console.log("Test connection already exists");
-        setError("Test connection already exists");
-        return;
-      }
-
-      // Create a self-connection for testing
-      const { error: insertError } = await supabase
-        .from("user_relationships")
-        .insert({
-          user_id: user.id,
-          following_id: user.id,
-          created_at: new Date(),
-        });
-
-      if (insertError) {
-        console.error("Error creating test connection:", insertError);
-        setError(`Error creating test connection: ${insertError.message}`);
-        return;
-      }
-
-      console.log("Test connection created successfully!");
-      alert("Test connection created successfully! Refresh to see results.");
-
-      // Refresh the data
-      await fetchUserConnections(user.id);
-    } catch (error) {
-      console.error("Exception creating test connection:", error);
-      setError(`Exception creating test connection: ${error.message}`);
-    }
-  };
-
-  // Update createTestBlogPost to match Blog.jsx
-  const createTestBlogPost = async () => {
-    try {
-      if (!user) {
-        setError("You need to be logged in to create a test post");
-        return;
-      }
-
-      console.log("Creating test blog post...");
-
-      // Using same structure as Blog.jsx
-      const { data, error } = await supabase
-        .from("blogs")
-        .insert({
-          title: "Test Blog Post",
-          summary: "This is a summary of the test blog post.",
-          content:
-            "This is the full content of the test blog post. It demonstrates that the blogs table is working correctly.",
-          author_id: user.id,
-          created_at: new Date(),
-          updated_at: new Date(),
-        })
-        .select();
-
-      if (error) {
-        console.error("Error creating test blog post:", error);
-        setError(`Error creating test blog post: ${error.message}`);
-        return;
-      }
-
-      console.log("Test blog post created successfully:", data);
-      alert("Test blog post created successfully! Refresh to see results.");
-
-      // Refresh the data
-      await fetchUserPosts(user.id);
-    } catch (error) {
-      console.error("Exception creating test blog post:", error);
-      setError(`Exception creating test blog post: ${error.message}`);
-    }
   };
 
   // Function to update user profile
@@ -706,11 +647,54 @@ const Profile = () => {
     }
   };
 
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+
+    if (!value.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    setShowSearchResults(true);
+
+    // Use debounce to avoid too many requests
+    clearTimeout(window.searchTimeout);
+    window.searchTimeout = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, username, full_name, email, avatar_url")
+          .or(
+            `username.ilike.%${value}%, full_name.ilike.%${value}%, email.ilike.%${value}%`
+          )
+          .limit(10);
+
+        if (error) throw error;
+        setSearchResults(data || []);
+      } catch (error) {
+        console.error("Error searching for users:", error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500);
+  };
+
+  const navigateToUserProfile = (userId) => {
+    navigate(`/profile/${userId}`);
+    setShowSearchResults(false);
+    setSearchTerm("");
+  };
+
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto py-8 px-4 animate-pulse">
-        <div className="flex flex-col md:flex-row items-center mb-8">
-          <div className="w-32 h-32 bg-gray-700 rounded-full mb-4 md:mb-0 md:mr-8"></div>
+      <div className="max-w-4xl mx-auto py-8 px-4 animate-pulse bg-black">
+        <div className="flex flex-col md:flex-row items-center mb-8 bg-black">
+          <div className="w-32 h-32 bg-black rounded-full mb-4 md:mb-0 md:mr-8"></div>
           <div className="flex-1">
             <div className="h-8 bg-gray-700 rounded w-48 mb-4"></div>
             <div className="h-4 bg-gray-700 rounded w-64 mb-6"></div>
@@ -728,7 +712,63 @@ const Profile = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
+    <div className="max-w-4xl mx-auto py-8 px-4 bg-black">
+      {/* Search bar */}
+      <div ref={searchRef} className="mb-6 relative bg-black">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search for users..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="w-full bg-gray-800/70 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+          />
+          {isSearching && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="animate-spin h-5 w-5 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+            </div>
+          )}
+        </div>
+
+        {/* Search results dropdown */}
+        {showSearchResults && searchResults.length > 0 && (
+          <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            {searchResults.map((result) => (
+              <div
+                key={result.id}
+                className="px-4 py-2 cursor-pointer hover:bg-gray-700 flex items-center"
+                onClick={() => navigateToUserProfile(result.id)}
+              >
+                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white mr-2">
+                  {result.username ? result.username[0].toUpperCase() : "U"}
+                </div>
+                <div>
+                  <div className="font-medium">
+                    {result.full_name || result.username || result.email}
+                  </div>
+                  {result.username && result.full_name && (
+                    <div className="text-xs text-gray-400">
+                      @{result.username}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {showSearchResults &&
+          searchTerm &&
+          searchResults.length === 0 &&
+          !isSearching && (
+            <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-4 text-center">
+              <p className="text-gray-400">
+                No users found matching "{searchTerm}"
+              </p>
+            </div>
+          )}
+      </div>
+
       {error && (
         <div className="bg-red-900/30 border border-red-700 text-red-100 px-4 py-3 rounded mb-6">
           <p>{error}</p>
@@ -745,7 +785,7 @@ const Profile = () => {
             </p>
 
             {setupStatus && (
-              <div className="mb-3 text-sm">
+              <div className="mb-3 text-sm bg-black">
                 <p>
                   Last setup attempt:{" "}
                   {new Date(setupStatus.timestamp).toLocaleString()}
@@ -754,7 +794,7 @@ const Profile = () => {
                   Status: {setupStatus.success ? "✅ Success" : "❌ Failed"}
                 </p>
                 {setupStatus.results && (
-                  <div className="mt-2 text-xs space-y-1">
+                  <div className="mt-2 text-xs space-y-1 bg-black">
                     <p>Tables:</p>
                     <ul className="list-disc pl-5">
                       {Object.entries(setupStatus.results).map(
@@ -777,7 +817,7 @@ const Profile = () => {
               </div>
             )}
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 bg-black">
               <button
                 onClick={initializeDatabase}
                 disabled={isSettingUp}
@@ -824,38 +864,8 @@ const Profile = () => {
           </div>
         )}
 
-      {/* Dev Mode Testing Tools */}
-      {process.env.NODE_ENV !== "production" && user && (
-        <div className="bg-purple-900/30 border border-purple-700 text-purple-100 px-4 py-3 rounded mb-6">
-          <p className="font-medium mb-2">Development Testing Tools</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={createTestConnection}
-              className="px-3 py-1 bg-purple-700 hover:bg-purple-600 rounded text-white text-sm"
-            >
-              Create Test Connection
-            </button>
-            <button
-              onClick={createTestBlogPost}
-              className="px-3 py-1 bg-purple-700 hover:bg-purple-600 rounded text-white text-sm"
-            >
-              Create Test Blog Post
-            </button>
-            <button
-              onClick={() => {
-                fetchUserPosts(user.id);
-                fetchUserConnections(user.id);
-              }}
-              className="px-3 py-1 bg-purple-700 hover:bg-purple-600 rounded text-white text-sm"
-            >
-              Refresh Data
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Profile Header */}
-      <div className="flex flex-col md:flex-row items-center mb-8">
+      <div className="flex flex-col md:flex-row items-center mb-8 bg-black">
         {/* Profile Picture */}
         <div
           className={`w-32 h-32 rounded-full bg-blue-600 flex items-center justify-center text-white text-4xl font-bold mb-4 md:mb-0 md:mr-8 overflow-hidden relative ${
@@ -918,7 +928,7 @@ const Profile = () => {
         </div>
 
         {/* Profile Info */}
-        <div className="flex-1 text-center md:text-left">
+        <div className="flex-1 text-center md:text-left bg-black">
           <h1 className="text-2xl font-bold text-white mb-1">
             {profile?.username || profile?.email?.split("@")[0] || "User"}
           </h1>
@@ -926,7 +936,7 @@ const Profile = () => {
           <p className="text-gray-300 mb-6">{profile?.bio || "No bio yet"}</p>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+          <div className="flex flex-wrap gap-2 justify-center md:justify-start bg-black">
             {user && profile && user.id !== profile.id ? (
               <>
                 <button
@@ -947,7 +957,13 @@ const Profile = () => {
                 </button>
                 {isFriend && (
                   <button
-                    onClick={() => navigate(`/chat/${profile.id}`)}
+                    onClick={() =>
+                      startDirectChat(
+                        profile.id,
+                        profile.username,
+                        profile.full_name
+                      )
+                    }
                     className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-full font-medium text-sm"
                   >
                     Message
@@ -955,7 +971,7 @@ const Profile = () => {
                 )}
               </>
             ) : isEditing ? (
-              <div className="space-y-3">
+              <div className="space-y-3 bg-black">
                 <textarea
                   value={updatedBio}
                   onChange={(e) => setUpdatedBio(e.target.value)}
@@ -964,7 +980,7 @@ const Profile = () => {
                   rows={3}
                   disabled={uploading}
                 ></textarea>
-                <div className="flex space-x-2">
+                <div className="flex space-x-2 bg-black">
                   <button
                     onClick={updateProfile}
                     disabled={uploading}
@@ -997,7 +1013,7 @@ const Profile = () => {
       </div>
 
       {/* Stats */}
-      <div className="flex justify-around bg-gray-800/50 rounded-lg p-4 mb-6 border border-gray-700/30">
+      <div className="flex justify-around bg-gray-800/50 rounded-lg p-4 mb-6 border border-gray-700/30 bg-black">
         <div className="text-center">
           <p className="text-2xl font-bold text-white">{stats.posts}</p>
           <p className="text-sm text-gray-400">Posts</p>
@@ -1013,7 +1029,7 @@ const Profile = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-700/50 mb-6">
+      <div className="flex border-b border-gray-700/50 mb-6 bg-black">
         <button
           onClick={() => setActiveTab("posts")}
           className={`px-4 py-2 font-medium text-sm ${
@@ -1047,11 +1063,11 @@ const Profile = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="mb-8">
+      <div className="mb-8 bg-black">
         {activeTab === "posts" && (
-          <div className="space-y-4">
+          <div className="space-y-4 bg-black">
             {posts.length === 0 ? (
-              <div className="text-center py-8">
+              <div className="text-center py-8 bg-black">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   className="h-16 w-16 mx-auto text-gray-600 mb-4"
@@ -1101,7 +1117,7 @@ const Profile = () => {
         {activeTab === "friends" && (
           <div className="bg-gray-800/30 rounded-lg overflow-hidden">
             {following.length === 0 ? (
-              <div className="text-center py-8">
+              <div className="text-center py-8 bg-black">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   className="h-16 w-16 mx-auto text-gray-600 mb-4"
@@ -1133,7 +1149,7 @@ const Profile = () => {
         {activeTab === "followers" && (
           <div className="bg-gray-800/30 rounded-lg overflow-hidden">
             {followers.length === 0 ? (
-              <div className="text-center py-8">
+              <div className="text-center py-8 bg-black">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   className="h-16 w-16 mx-auto text-gray-600 mb-4"

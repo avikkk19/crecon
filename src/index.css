@@ -3,7 +3,7 @@
 /* @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Space+Grotesk:wght@300..700&display=swap'); */
 body {
   font-family: "inter", sans-serif;
-  background-color: #121212;
+  background-color: black;
 }
 
 /* Media query for mobile responsiveness - remove padding on small screens */

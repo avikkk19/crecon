@@ -1,6 +1,9 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 function FriendsList({ friends, selectedChat, onFriendSelect }) {
+  const navigate = useNavigate();
+
   // Format last message time
   const formatTime = (timestamp) => {
     if (!timestamp) return "";
@@ -8,6 +11,14 @@ function FriendsList({ friends, selectedChat, onFriendSelect }) {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  // Navigate to profile
+  const navigateToProfile = (e, userId) => {
+    e.stopPropagation(); // Prevent triggering the chat selection
+    if (userId) {
+      navigate(`/profile/${userId}`);
+    }
   };
 
   // If no friends, show empty state
@@ -61,8 +72,19 @@ function FriendsList({ friends, selectedChat, onFriendSelect }) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-baseline">
-                <h3 className="font-medium truncate">
-                  {friend.username || friend.email}
+                <h3
+                  className="font-medium truncate cursor-pointer hover:underline"
+                  onClick={(e) => navigateToProfile(e, friend.id)}
+                >
+                  {friend.full_name
+                    ? friend.full_name.length > 12
+                      ? friend.full_name.slice(0, 12) + "..."
+                      : friend.full_name
+                    : friend.username
+                    ? friend.username.length > 12
+                      ? friend.username.slice(0, 12) + "..."
+                      : friend.username
+                    : friend.email}
                 </h3>
                 {friend.last_message_time && (
                   <span className="text-xs text-gray-400 ml-1 flex-shrink-0">
@@ -70,6 +92,11 @@ function FriendsList({ friends, selectedChat, onFriendSelect }) {
                   </span>
                 )}
               </div>
+              {friend.username && friend.full_name && (
+                <p className="text-xs text-gray-400 truncate">
+                  @{friend.username}
+                </p>
+              )}
               {friend.last_message && (
                 <p className="text-sm text-gray-400 truncate">
                   {friend.last_message}

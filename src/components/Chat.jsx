@@ -24,6 +24,7 @@ function Chat() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
   const [uploadError, setUploadError] = useState(null);
+  const [loadingFriends, setLoadingFriends] = useState(false);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const messageContainerRef = useRef(null);
@@ -210,6 +211,56 @@ function Chat() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Check for selected user in sessionStorage (from Blog or Profile)
+  useEffect(() => {
+    if (session) {
+      // Check if we have a selectedUser in sessionStorage (from Blog or Profile)
+      const storedUserData = sessionStorage.getItem("selectedUser");
+      if (storedUserData) {
+        try {
+          const userData = JSON.parse(storedUserData);
+          // Find if this user exists in our profiles
+          const existsInProfiles = profiles.find((p) => p.id === userData.id);
+
+          if (!existsInProfiles) {
+            // Add to profiles if not already there
+            setProfiles((prevProfiles) => {
+              // Make sure we don't add duplicates
+              if (!prevProfiles.some((p) => p.id === userData.id)) {
+                return [
+                  ...prevProfiles,
+                  {
+                    ...userData,
+                    is_online: false, // Default status
+                    last_message: "",
+                    last_message_time: null,
+                  },
+                ];
+              }
+              return prevProfiles;
+            });
+          }
+
+          // Set as selected user
+          setSelectedUser(userData);
+          setSelectedChat(userData);
+
+          // Clear from sessionStorage so it doesn't persist on refresh
+          sessionStorage.removeItem("selectedUser");
+
+          // If there's also an initial message, prepare it
+          const initialMessage = sessionStorage.getItem("initialMessage");
+          if (initialMessage) {
+            setNewMessage(initialMessage);
+            sessionStorage.removeItem("initialMessage");
+          }
+        } catch (error) {
+          console.error("Error parsing stored user data:", error);
+        }
+      }
+    }
+  }, [session, profiles]);
 
   // Fetch follow requests
   const fetchFollowRequests = async () => {
@@ -484,6 +535,7 @@ function Chat() {
         return;
       }
 
+      setLoadingFriends(true);
       console.log("Fetching relationships for user:", session.user.id);
 
       const { data: relationships, error: relationshipsError } = await supabase
@@ -498,6 +550,7 @@ function Chat() {
 
         // Make sure we load all users anyway so they can be searched
         fetchAllUsers();
+        setLoadingFriends(false);
         return;
       }
 
@@ -512,6 +565,7 @@ function Chat() {
 
         // Make sure we load all users anyway so they can be searched
         fetchAllUsers();
+        setLoadingFriends(false);
         return;
       }
 
@@ -524,6 +578,7 @@ function Chat() {
         console.error("Error fetching followed profiles:", error);
         setProfiles([]);
         setFriends([]);
+        setLoadingFriends(false);
         return;
       }
 
@@ -536,10 +591,12 @@ function Chat() {
       );
       console.log("Setting friends data:", enhancedFriends);
       setFriends(enhancedFriends);
+      setLoadingFriends(false);
     } catch (error) {
       console.error("Error in fetchProfiles:", error);
       setProfiles([]);
       setFriends([]);
+      setLoadingFriends(false);
     }
   }
 
@@ -1286,6 +1343,13 @@ function Chat() {
     return friendsWithData;
   }
 
+  // Handle navigating to user profile
+  const navigateToProfile = (userId) => {
+    if (userId) {
+      navigate(`/profile/${userId}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[radial-gradient(ellipse_at_center,_#0f172a_10%,_#042f2e_40%,_#000000_80%)] text-white">
@@ -1393,11 +1457,22 @@ function Chat() {
                               </div>
                               <div>
                                 <div className="font-medium">
-                                  {user.username || user.email}
+                                  {user.full_name
+                                    ? user.full_name.length > 10
+                                      ? user.full_name.slice(0, 10) + "..."
+                                      : user.full_name
+                                    : user.username
+                                    ? user.username.length > 10
+                                      ? user.username.slice(0, 10) + "..."
+                                      : user.username
+                                    : user.email}
                                 </div>
-                                {user.full_name && (
+                                {user.username && user.full_name && (
                                   <div className="text-sm text-gray-400">
-                                    {user.full_name}
+                                    @
+                                    {user.username.length > 8
+                                      ? user.username.slice(0, 8) + "..."
+                                      : user.username}
                                   </div>
                                 )}
                               </div>
@@ -1411,6 +1486,13 @@ function Chat() {
                     Type to search for users
                   </p>
                 )}
+              </div>
+            ) : loadingFriends ? (
+              <div className="flex flex-col items-center justify-center h-full py-10">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white mb-4"></div>
+                <p className="text-sm text-gray-400">
+                  Loading conversations...
+                </p>
               </div>
             ) : (
               <FriendsList
@@ -1428,15 +1510,34 @@ function Chat() {
             <>
               {/* Chat header */}
               <div className="px-4 py-3 border-b border-gray-800/50 flex items-center">
-                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3">
+                <div
+                  className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3 cursor-pointer hover:opacity-80"
+                  onClick={() => navigateToProfile(selectedChat.id)}
+                >
                   {selectedChat.username
                     ? selectedChat.username[0].toUpperCase()
                     : "U"}
                 </div>
-                <div>
+                <div
+                  className="cursor-pointer hover:opacity-80"
+                  onClick={() => navigateToProfile(selectedChat.id)}
+                >
                   <div className="font-medium">
-                    {selectedChat.username || selectedChat.email}
+                    {selectedChat.full_name
+                      ? selectedChat.full_name.length > 15
+                        ? selectedChat.full_name.slice(0, 15) + "..."
+                        : selectedChat.full_name
+                      : selectedChat.username
+                      ? selectedChat.username.length > 15
+                        ? selectedChat.username.slice(0, 15) + "..."
+                        : selectedChat.username
+                      : selectedChat.email}
                   </div>
+                  {selectedChat.username && selectedChat.full_name && (
+                    <div className="text-xs text-gray-400">
+                      @{selectedChat.username}
+                    </div>
+                  )}
                   {selectedChat.is_online ? (
                     <div className="text-xs text-green-500 flex items-center">
                       <span className="w-2 h-2 rounded-full bg-green-500 mr-1"></span>
